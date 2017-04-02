@@ -378,9 +378,41 @@ func (c *compiler) genInterface(name string, iface *types.Interface) {
 	fmt.Printf("};\n")
 }
 
-func (c *compiler) genStruct(name string, s *types.Struct) {
-	fmt.Printf("struct %s {\n", name)
+func (c *compiler) genStruct(name string, s *types.Struct, n *types.Named) {
+	fmt.Printf("struct %s", name)
 
+	// FIXME: this is highly inneficient and won't scale at all
+	var ifaces []string
+	for k, v := range c.inf.Types {
+		if _, ok := k.(*ast.InterfaceType); !ok {
+			continue
+		}
+
+		iface := v.Type.(*types.Interface)
+		if !types.Implements(n, iface) {
+			continue
+		}
+
+		for _, typ := range c.inf.Defs {
+			if def, ok := typ.(*types.TypeName); ok {
+				if !types.IsInterface(def.Type()) {
+					continue
+				}
+				if !types.Implements(def.Type(), iface) {
+					continue
+				}
+
+				derived := fmt.Sprintf("public %s", def.Name())
+				ifaces = append(ifaces, derived)
+				break
+			}
+		}
+	}
+	if ifaces != nil {
+		fmt.Printf(" : %s", strings.Join(ifaces, ", "))
+	}
+
+	fmt.Print(" {\n")
 	numFields := s.NumFields()
 	for f := 0; f < numFields; f++ {
 		f := s.Field(f)
@@ -431,7 +463,7 @@ func (c *compiler) genNamedType(name string, n *types.Named) {
 	case *types.Interface:
 		c.genInterface(name, t)
 	case *types.Struct:
-		c.genStruct(name, t)
+		c.genStruct(name, t, n)
 	case *types.Basic:
 		c.genBasicType(name, t)
 	default:
