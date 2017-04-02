@@ -23,3 +23,41 @@ worth of work, so there are many mistakes and opportunities to
 refactor.  Of note, no testing is performed.  Any help to move this
 forward is greatly appreciated.
 
+# Sample code
+
+## surface (from chapter 3 of "The Go Programming Language" by Kernigham and Donovan)
+
+[Full code here](https://gist.github.com/lpereira/8bc64bf9796984b7868b8255d1692d59), excerpt below:
+
+### Go
+
+    func corner(i, j int) (float64, float64) {
+            // Find point (x,y) at corner of cell (i,j).
+            x := xyrange * (float64(i)/cells - 0.5)
+            y := xyrange * (float64(j)/cells - 0.5)
+
+            // Compute surface height z.
+            z := f(x, y)
+
+            // Project (x,y,z) isometrically onto 2-D SVG canvas (sx,sy).
+            sx := width/2 + (x-y)*cos30*xyscale
+            sy := height/2 + (x+y)*sin30*xyscale - z*zscale
+            return sx, sy
+    }
+
+
+### C++
+
+    std::pair<double, double> corner(int i, int j) {
+      double sx{0};
+      double sy{0};
+      double x{0};
+      double y{0};
+      double z{0};
+      x = xyrange * (float64(i) / cells - 0.5);
+      y = xyrange * (float64(j) / cells - 0.5);
+      z = f(x, y);
+      sx = width / 2 + (x - y) * cos30 * xyscale;
+      sy = height / 2 + (x + y) * sin30 * xyscale - z * zscale;
+      return std::pair<double, double>(sx, sy);
+    }
