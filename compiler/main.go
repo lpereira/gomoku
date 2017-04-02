@@ -734,11 +734,8 @@ func (c *Compiler) genFuncDecl(f *ast.FuncDecl) (err error) {
 		return err
 	}
 
-	for _, stmt := range f.Body.List {
-		if err = c.walk(stmt); err != nil {
-			return err
-		}
-		fmt.Println(";")
+	if err = c.genBlockStmt(f.Body); err != nil {
+		return err
 	}
 
 	fmt.Println("}")
@@ -896,22 +893,31 @@ func (c *Compiler) genForStmt(f *ast.ForStmt) (err error) {
 	}
 
 	fmt.Fprintf(c.output, ") {")
-
 	if err = c.genScopeVars(f.Body, noNameFilter); err != nil {
 		return err
 	}
+	if err = c.genBlockStmt(f.Body); err != nil {
+		return err
+	}
+	fmt.Fprintf(c.output, "}")
 
-	for _, s := range f.Body.List {
-		if err = c.walk(s); err != nil {
+	fmt.Fprintf(c.output, "}")
+
+	return nil
+}
+
+func (c *Compiler) genBlockStmt(blk *ast.BlockStmt) (err error) {
+	for _, stmt := range blk.List {
+		if err = c.walk(stmt); err != nil {
 			return err
 		}
-		fmt.Println(";")
+		switch stmt.(type) {
+		default:
+			fmt.Println(";")
+
+		case *ast.ForStmt:
+		}
 	}
-
-	fmt.Fprintf(c.output, "}")
-
-	fmt.Fprintf(c.output, "}")
-
 	return nil
 }
 
