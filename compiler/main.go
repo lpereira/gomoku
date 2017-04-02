@@ -703,7 +703,12 @@ func (c *Compiler) genFuncDecl(f *ast.FuncDecl) (err error) {
 
 	fun := typ.(*types.Func)
 	sig := fun.Type().(*types.Signature)
+	recv := sig.Recv()
 	err = c.genFuncProto(name, sig, func(name, retType, params string) {
+		if recv != nil {
+			typ := recv.Type().(*types.Named).Obj().Name()
+			name = fmt.Sprintf("%s::%s", typ, name)
+		}
 		fmt.Fprintf(c.output, "%s %s(%s)\n", retType, name, params)
 	})
 	if err != nil {
@@ -713,6 +718,10 @@ func (c *Compiler) genFuncDecl(f *ast.FuncDecl) (err error) {
 	fmt.Println("{")
 
 	err = c.genScopeVars(f.Type, func(name string) bool {
+		if recv != nil && recv.Name() == name {
+			return false
+		}
+
 		parms := sig.Params()
 		for p := 0; p < parms.Len(); p++ {
 			if parms.At(p).Name() == name {

@@ -85,8 +85,8 @@ greatly appreciated.
     struct Interfacer { // NB: this is declared in the wrong order
       virtual int Interface() = 0;
     };
-    int Interface() { // NB: this is wrong, should be a method of Foo
-      Foo f{};
+    int Foo::Interface() {
+      // NB: the selector is wrong below; it should've been this->someInt
       return main::someInt;
     }
 
