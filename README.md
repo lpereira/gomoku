@@ -6,11 +6,11 @@ Language, targeting modern C++.
 This is an experiment to determine how well Go will perform on embedded
 devices, where a port of existing compilers would prove to be actually
 more complicated due to the different expectations from platforms
-supported by gc and devices with very few kilobytes of RAM.
+supported by gc: devices with severe memory restrictions and without
+virtual memory.
 
 The bulk of the compiler has been written in a day (April 1st, 2017),
-but in reality, it's the author's second attempt at doing so.  The
-lexer, parser, and type system are part of the standard library
+The lexer, parser, and type system are part of the standard library
 already, so it was just the matter of tying everything together.
 
 The generated code still doesn't compile: only the input program itself
@@ -18,14 +18,12 @@ is generated.  All the type information and constants from imported
 packages is also generated, but no functions or methods from those are
 actually generated.
 
-Also, the code has been hacked together in a little bit less than a day
-worth of work, so there are many mistakes and opportunities to
-refactor.  Of note, no testing is performed.  Any help to move this
-forward is greatly appreciated.
+No automated testing is performed.  Any help to move this forward is
+greatly appreciated.
 
 # Sample code
 
-## surface (from chapter 3 of "The Go Programming Language" by Kernigham and Donovan)
+## surface (from chapter 3 of "The Go Programming Language" by Kernighan and Donovan)
 
 [Full code here](https://gist.github.com/lpereira/8bc64bf9796984b7868b8255d1692d59), excerpt below:
 
@@ -61,3 +59,24 @@ forward is greatly appreciated.
       sy = height / 2 + (x + y) * sin30 * xyscale - z * zscale;
       return std::pair<double, double>(sx, sy);
     }
+
+# Moving forward
+
+There are many things that can (and need) to be performed before calling
+this even remotely usable.  Here's a short list of tasks and things that
+need to be implemented; it's by no means complete, and some of these tasks
+are way more challenging than others:
+
+- [ ] Reorganize the package in smaller files
+- [ ] Implement unit tests
+- [ ] Get pointer vs. value semantics as correct as possible
+- [ ] Implement type conversion
+- [ ] Implement basic Go data types (arrays, slices, and maps)
+- [ ] Closures / anonymous functions
+- [ ] Deferred statements
+- [ ] Range-based loops
+- [ ] Write a basic standard library for embedded devices
+- [ ] Memory management with garbage collection
+- [ ] Perform escape analysis to determine where to allocate things
+- [ ] Channels
+- [ ] Goroutines
