@@ -52,8 +52,8 @@ greatly appreciated.
       double x{0};
       double y{0};
       double z{0};
-      x = xyrange * (float64(i) / cells - 0.5);
-      y = xyrange * (float64(j) / cells - 0.5);
+      x = xyrange * (double(i) / cells - 0.5);
+      y = xyrange * (double(j) / cells - 0.5);
       z = f(x, y);
       sx = width / 2 + (x - y) * cos30 * xyscale;
       sy = height / 2 + (x + y) * sin30 * xyscale - z * zscale;

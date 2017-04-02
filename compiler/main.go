@@ -70,6 +70,7 @@ type basicTypeInfo struct {
 }
 
 var basicTypeToCpp map[types.BasicKind]basicTypeInfo
+var goTypeToBasic  map[string]types.BasicKind
 
 func init() {
 	basicTypeToCpp = map[types.BasicKind]basicTypeInfo{
@@ -93,6 +94,23 @@ func init() {
 		types.String:        {"0", "std::string"},
 		types.UntypedString: {"0", "std::string"},
 		types.UnsafePointer: {"0", "void*"},
+	}
+	goTypeToBasic = map[string]types.BasicKind{
+		"bool":    types.Bool,
+		"int":     types.Int,
+		"int8":    types.Int8,
+		"int16":   types.Int16,
+		"int32":   types.Int32,
+		"int64":   types.Int64,
+		"uint":    types.Uint,
+		"uint8":   types.Uint8,
+		"uint16":  types.Uint16,
+		"uint32":  types.Uint32,
+		"uint64":  types.Uint64,
+		"uintptr": types.Uintptr,
+		"float32": types.Float32,
+		"float64": types.Float64,
+		"string":  types.String,
 	}
 }
 
@@ -809,8 +827,18 @@ func (c *Compiler) genIdent(i *ast.Ident) error {
 }
 
 func (c *Compiler) genCallExpr(call *ast.CallExpr) (err error) {
-	if err = c.walk(call.Fun); err != nil {
-		return err
+	var cppTyp bool
+	if ident, ok := call.Fun.(*ast.Ident); ok {
+		if bk, ok := goTypeToBasic[ident.Name]; ok {
+			fmt.Fprint(c.output, basicTypeToCpp[bk].typ)
+			cppTyp = true
+		}
+	}
+
+	if !cppTyp {
+		if err = c.walk(call.Fun); err != nil {
+			return err
+		}
 	}
 
 	fmt.Fprintf(c.output, "(")
