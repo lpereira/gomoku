@@ -75,8 +75,9 @@ are way more challenging than others:
 - [ ] Closures / anonymous functions
 - [ ] Deferred statements
 - [ ] Range-based loops
+- [ ] Switch statement
 - [ ] Write a basic standard library for embedded devices
 - [ ] Memory management with garbage collection
 - [ ] Perform escape analysis to determine where to allocate things
-- [ ] Channels
+- [ ] Channels (including select statement)
 - [ ] Goroutines
