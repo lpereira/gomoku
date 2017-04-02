@@ -60,6 +60,46 @@ greatly appreciated.
       return std::pair<double, double>(sx, sy);
     }
 
+## samples/interfaces/interfaces.go
+
+### Go
+
+    type Interfacer interface {
+            Interface() int
+    }
+
+    type Foo struct {
+            someInt int
+    }
+
+    func (f Foo) Interface() int {
+            return f.someInt
+    }
+
+### C++
+
+    struct Foo : public Interfacer {
+      int someInt{0};
+      virtual int Interface() override;
+    };
+    struct Interfacer { // NB: this is declared in the wrong order
+      virtual int Interface() = 0;
+    };
+    int Interface() { // NB: this is wrong, should be a method of Foo
+      Foo f{};
+      return main::someInt;
+    }
+
+# Usage
+
+The program is parsed from the standard input and written to the standard
+output:
+
+    gomoku < samples/interfaces/interfaces.go
+
+To generate type system debugging information instead of C++ code, pass
+the -debugtype command line flag.
+
 # Moving forward
 
 There are many things that can (and need) to be performed before calling
