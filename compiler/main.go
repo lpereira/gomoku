@@ -1114,16 +1114,6 @@ func (c *Compiler) walk(node ast.Node) error {
 	}
 }
 
-func (c *Compiler) gen() (err error) {
-	for _, decl := range c.ast.Decls {
-		err = c.walk(ast.Node(decl))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (c *Compiler) Compile() (err error) {
 	if err = c.genImports(); err != nil {
 		return err
@@ -1134,7 +1124,12 @@ func (c *Compiler) Compile() (err error) {
 	if err = c.genMain(); err != nil {
 		return err
 	}
-	return c.gen()
+	for _, decl := range c.ast.Decls {
+		if err = c.walk(ast.Node(decl)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Compiler) DebugTypeSystem() {
