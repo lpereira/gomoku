@@ -914,7 +914,18 @@ func (c *compiler) genReturnStmt(r *ast.ReturnStmt) {
 }
 
 func (c *compiler) genCompositeLit(cl *ast.CompositeLit) {
-	fmt.Printf("// composite %s\n", cl)
+	if cl.Type != nil {
+		c.walk(cl.Type)
+	}
+
+	fmt.Printf("{")
+	for i, elt := range cl.Elts {
+		c.walk(elt)
+		if i < len(cl.Elts)-1 {
+			fmt.Print(", ")
+		}
+	}
+	fmt.Printf("}")
 }
 
 func (c *compiler) genParenExpr(p *ast.ParenExpr) {
