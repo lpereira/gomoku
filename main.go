@@ -294,24 +294,19 @@ func (c *compiler) toTypeSig(t types.Type) (string, error) {
 func (c *compiler) toNilVal(t types.Type) (string, error) {
 	f := func(t types.Type) (string, error) {
 		switch typ := t.(type) {
-		default:
-			return "", fmt.Errorf("unknown nil value for type %s", reflect.TypeOf(typ))
-
-		case *types.Named:
-			return "", nil
-
 		case *types.Basic:
 			if v, ok := basicTypeToCpp[typ.Kind()]; ok {
 				return v.nilVal, nil
 			}
-			return "", fmt.Errorf("Unknown nil value for basic kind %d", typ.Kind())
-
 		case *types.Pointer, *types.Signature:
 			return "std::nullptr", nil
 
-		case *types.Slice, *types.Chan, *types.Interface:
+		case *types.Slice, *types.Chan, *types.Interface, *types.Named:
 			return "", nil
 		}
+
+		err := fmt.Errorf("Unknown nil value for type %s", reflect.TypeOf(t))
+		return "", err
 	}
 
 	nilVal, err := f(t)
