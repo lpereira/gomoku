@@ -383,6 +383,7 @@ func (c *compiler) genStruct(name string, s *types.Struct, n *types.Named) {
 
 	// FIXME: this is highly inneficient and won't scale at all
 	var ifaces []string
+	ifaceMeths := make(map[string]struct{})
 	for k, v := range c.inf.Types {
 		if _, ok := k.(*ast.InterfaceType); !ok {
 			continue
@@ -400,6 +401,10 @@ func (c *compiler) genStruct(name string, s *types.Struct, n *types.Named) {
 				}
 				if !types.Implements(def.Type(), iface) {
 					continue
+				}
+
+				for i := 0; i < iface.NumMethods(); i++ {
+					ifaceMeths[iface.Method(i).Name()] = struct{}{}
 				}
 
 				derived := fmt.Sprintf("public %s", def.Name())
@@ -433,6 +438,27 @@ func (c *compiler) genStruct(name string, s *types.Struct, n *types.Named) {
 		}
 
 		fmt.Printf("%s %s;\n", typ, f.Name())
+	}
+
+	mset := types.NewMethodSet(n)
+	for i := 0; i < mset.Len(); i++ {
+		sel := mset.At(i)
+		switch sel.Kind() {
+		default:
+			log.Fatalf("Kind %d not supported here", sel.Kind())
+
+		case types.MethodVal:
+			f := sel.Obj().(*types.Func)
+			sig := f.Type().(*types.Signature)
+
+			c.genFuncProto(f.Name(), sig, func(name, retType, params string) {
+				if _, virtual := ifaceMeths[f.Name()]; virtual {
+					fmt.Printf("virtual %s %s(%s) override;\n", retType, name, params)
+				} else {
+					fmt.Printf("%s %s(%s);\n", retType, name, params)
+				}
+			})
+		}
 	}
 
 	fmt.Printf("};\n")
