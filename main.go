@@ -5,15 +5,24 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"os"
 	"github.com/lpereira/gomoku/compiler"
 )
 
 func main() {
+	debugType := flag.Bool("debugtype", false, "Prints type system debugging information")
+	flag.Parse()
+
 	c, err := compiler.NewCompiler(os.Stdin, os.Stdout)
 	if err != nil {
 		log.Fatalf("Could not create compiler: %s", err)
+	}
+
+	if *debugType {
+		c.DebugTypeSystem()
+		return
 	}
 
 	if err = c.Compile(); err != nil {
