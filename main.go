@@ -702,26 +702,11 @@ func (c *compiler) genComment(comment *ast.Comment) {
 	fmt.Printf("/* %s */", comment.Text)
 }
 
-func isParam(sig *types.Signature, name string) bool {
-	parms := sig.Params()
-	for p := 0; p < parms.Len(); p++ {
-		if parms.At(p).Name() == name {
-			return true
-		}
-	}
-	return false
-}
-
 func (c *compiler) genFuncDecl(f *ast.FuncDecl) {
 	var typ types.Object
 	typ, ok := c.inf.Defs[f.Name]
 	if !ok {
 		log.Fatalf("Could not find type for func %s", f.Name.Name)
-	}
-
-	scope, ok := c.inf.Scopes[f.Type]
-	if !ok {
-		log.Fatalf("Could not find scope for %s", f.Name.Name)
 	}
 
 	name := f.Name.Name
@@ -737,16 +722,15 @@ func (c *compiler) genFuncDecl(f *ast.FuncDecl) {
 
 	fmt.Println("{")
 
-	for _, name := range scope.Names() {
-		if isParam(sig, name) {
-			continue
+	c.genScopeVars(f.Type, func(name string) bool {
+		parms := sig.Params()
+		for p := 0; p < parms.Len(); p++ {
+			if parms.At(p).Name() == name {
+				return false
+			}
 		}
-
-		obj := scope.Lookup(name)
-
-		v := obj.(*types.Var)
-		c.genVar(v, false)
-	}
+		return true
+	})
 
 	for _, stmt := range f.Body.List {
 		c.walk(stmt)
@@ -876,6 +860,9 @@ func (c *compiler) genForStmt(f *ast.ForStmt) {
 	}
 
 	fmt.Printf(") {")
+
+	c.genScopeVars(f.Body, noNameFilter)
+
 	for _, s := range f.Body.List {
 		c.walk(s)
 		fmt.Println(";")
@@ -885,6 +872,19 @@ func (c *compiler) genForStmt(f *ast.ForStmt) {
 
 	fmt.Printf("}")
 
+}
+
+func noNameFilter(name string) bool { return true }
+
+func (c *compiler) genScopeVars(node ast.Node, filter func(name string) bool) {
+	if scope, ok := c.inf.Scopes[node]; ok {
+		for _, name := range scope.Names() {
+			if !filter(name) {
+				continue
+			}
+			c.genVar(scope.Lookup(name).(*types.Var), false)
+		}
+	}
 }
 
 func (c *compiler) genExprStmt(e *ast.ExprStmt) {
