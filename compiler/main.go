@@ -511,16 +511,14 @@ func (c *Compiler) genNamespace(p *types.Package, mainBlock bool) (err error) {
 
 	genTypeProto := func(name string, obj types.Object) error {
 		switch t := obj.Type().(type) {
+		default:
+			return nil
 		case *types.Named:
-			if err = c.genNamedType(name, t); err != nil {
-				return err
-			}
+			return c.genNamedType(name, t)
+
 		case *types.Signature:
-			if err = c.genPrototype(name, t); err != nil {
-				return err
-			}
+			return c.genPrototype(name, t)
 		}
-		return nil
 	}
 
 	s := p.Scope()
