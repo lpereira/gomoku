@@ -915,7 +915,7 @@ func (c *Compiler) genBlockStmt(blk *ast.BlockStmt) (err error) {
 		default:
 			fmt.Println(";")
 
-		case *ast.ForStmt:
+		case *ast.ForStmt, *ast.DeclStmt:
 		}
 	}
 	return nil
@@ -950,7 +950,6 @@ func (c *Compiler) genBinaryExpr(b *ast.BinaryExpr) (err error) {
 }
 
 func (c *Compiler) genDeclStmt(d *ast.DeclStmt) error {
-	fmt.Fprintf(c.output, "// declstmt %s\n", d)
 	return nil
 }
 
