@@ -25,7 +25,7 @@ type Compiler struct {
 
 	initPkgs []string
 
-	input io.Reader
+	input  io.Reader
 	output io.Writer
 
 	recvs VarStack
@@ -71,7 +71,7 @@ func NewCompiler(in io.Reader, out io.Writer) (*Compiler, error) {
 			Implicits:  make(map[ast.Node]types.Object),
 			Scopes:     make(map[ast.Node]*types.Scope),
 		},
-		input: in,
+		input:  in,
 		output: out,
 	}
 
@@ -101,7 +101,7 @@ type basicTypeInfo struct {
 }
 
 var basicTypeToCpp map[types.BasicKind]basicTypeInfo
-var goTypeToBasic  map[string]types.BasicKind
+var goTypeToBasic map[string]types.BasicKind
 
 func init() {
 	basicTypeToCpp = map[types.BasicKind]basicTypeInfo{
