@@ -1080,6 +1080,40 @@ func (c *Compiler) genCommentGroup(g *ast.CommentGroup) (err error) {
 	return nil
 }
 
+func (c *Compiler) genLabeledStmt(l *ast.LabeledStmt) (err error) {
+	if err = c.walk(l.Label); err != nil {
+		return err
+	}
+	fmt.Fprintf(c.output, ":\n")
+	return nil
+}
+
+func (c *Compiler) genBranchStmt(b *ast.BranchStmt) (err error) {
+	switch b.Tok {
+	case token.GOTO:
+		if b.Label == nil {
+			return fmt.Errorf("Goto without label")
+		}
+		fmt.Fprintf(c.output, "goto ")
+		if err = c.walk(b.Label); err != nil {
+			return err
+		}
+	case token.BREAK:
+		if b.Label != nil {
+			return fmt.Errorf("Break with labels not supported yet")
+		}
+		fmt.Fprintf(c.output, "break")
+	case token.CONTINUE:
+		if b.Label != nil {
+			return fmt.Errorf("Continue with labels not supported yet")
+		}
+		fmt.Fprintf(c.output, "continue")
+	case token.FALLTHROUGH:
+		return fmt.Errorf("Fallthrough not supported yet")
+	}
+	return nil
+}
+
 func (c *Compiler) walk(node ast.Node) error {
 	switch n := node.(type) {
 	default:
@@ -1135,6 +1169,12 @@ func (c *Compiler) walk(node ast.Node) error {
 
 	case *ast.CompositeLit:
 		return c.genCompositeLit(n)
+
+	case *ast.LabeledStmt:
+		return c.genLabeledStmt(n)
+
+	case *ast.BranchStmt:
+		return c.genBranchStmt(n)
 
 	case *ast.GenDecl:
 		return nil
