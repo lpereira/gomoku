@@ -29,66 +29,82 @@ greatly appreciated.
 
 ### Go
 
-    func corner(i, j int) (float64, float64) {
-            // Find point (x,y) at corner of cell (i,j).
-            x := xyrange * (float64(i)/cells - 0.5)
-            y := xyrange * (float64(j)/cells - 0.5)
+```Go
+func corner(i, j int) (float64, float64) {
+        // Find point (x,y) at corner of cell (i,j).
+        x := xyrange * (float64(i)/cells - 0.5)
+        y := xyrange * (float64(j)/cells - 0.5)
 
-            // Compute surface height z.
-            z := f(x, y)
+        // Compute surface height z.
+        z := f(x, y)
 
-            // Project (x,y,z) isometrically onto 2-D SVG canvas (sx,sy).
-            sx := width/2 + (x-y)*cos30*xyscale
-            sy := height/2 + (x+y)*sin30*xyscale - z*zscale
-            return sx, sy
-    }
-
+        // Project (x,y,z) isometrically onto 2-D SVG canvas (sx,sy).
+        sx := width/2 + (x-y)*cos30*xyscale
+        sy := height/2 + (x+y)*sin30*xyscale - z*zscale
+        return sx, sy
+}
+```
 
 ### C++
 
-    std::pair<double, double> corner(int i, int j) {
-      double sx{0};
-      double sy{0};
-      double x{0};
-      double y{0};
-      double z{0};
-      x = xyrange * (double(i) / cells - 0.5);
-      y = xyrange * (double(j) / cells - 0.5);
-      z = f(x, y);
-      sx = width / 2 + (x - y) * cos30 * xyscale;
-      sy = height / 2 + (x + y) * sin30 * xyscale - z * zscale;
-      return std::pair<double, double>(sx, sy);
-    }
+```C++
+std::pair<double, double> corner(int i, int j) {
+  double sx{0};
+  double sy{0};
+  double x{0};
+  double y{0};
+  double z{0};
+  x = xyrange * (double(i) / cells - 0.5);
+  y = xyrange * (double(j) / cells - 0.5);
+  z = f(x, y);
+  sx = width / 2 + (x - y) * cos30 * xyscale;
+  sy = height / 2 + (x + y) * sin30 * xyscale - z * zscale;
+  return std::pair<double, double>(sx, sy);
+}
+```
 
 ## samples/interfaces/interfaces.go
 
 ### Go
 
-    type Interfacer interface {
-            Interface() int
-    }
+```Go
+type Interfacer interface {
+        Interface() int
+}
 
-    type Foo struct {
-            someInt int
-    }
+type Foo struct {
+        SomeInt int
+}
 
-    func (f Foo) Interface() int {
-            return f.someInt
-    }
+func (f Foo) Interface() int {
+        var f2 Foo
+        return f2.SomeInt * f.ConcreteMethod()
+}
+
+func (f Foo) ConcreteMethod() int { return 42 }
+
+func UsingInterfaceType(i Interfacer) int { return i.Interface() * 1234 }
+```
 
 ### C++
 
-    struct Foo : public Interfacer {
-      int someInt{0};
-      virtual int Interface() override;
-    };
-    struct Interfacer { // NB: this is declared in the wrong order
-      virtual int Interface() = 0;
-    };
-    int Foo::Interface() {
-      // NB: the selector is wrong below; it should've been this->someInt
-      return main::someInt;
-    }
+```C++
+struct Foo : public Interfacer {
+  int SomeInt{0};
+  int ConcreteMethod();
+  virtual int Interface() override;
+};
+struct Interfacer { // NB: this is declared in the wrong order
+  virtual int Interface() = 0;
+};
+int UsingInterfaceType(Interfacer i);
+int Foo::Interface() {
+  Foo f2{};
+  return f2.SomeInt * this->ConcreteMethod();
+}
+int Foo::ConcreteMethod() { return 42; }
+int UsingInterfaceType(Interfacer i) { return i.Interface() * 1234; }
+```
 
 # Usage
 

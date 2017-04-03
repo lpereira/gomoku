@@ -15,6 +15,8 @@ func (f Foo) Interface() int {
 
 func (f Foo) ConcreteMethod() int { return 42 }
 
+func UsingInterfaceType(i Interfacer) int { return i.Interface() * 1234 }
+
 func main() {
 	var f Foo
 	println(f.Interface())
