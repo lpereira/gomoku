@@ -48,7 +48,7 @@ func corner(i, j int) (float64, float64) {
 ### C++
 
 ```C++
-std::pair<double, double> corner(int i, int j) {
+std::tuple<double, double> corner(int i, int j) {
   double sx{0};
   double sy{0};
   double x{0};

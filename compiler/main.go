@@ -351,7 +351,7 @@ func (c *Compiler) genFuncProto(name string, sig *types.Signature, out func(name
 			mult = append(mult, s)
 		}
 
-		retType = fmt.Sprintf("std::pair<%s>", strings.Join(mult, ", "))
+		retType = fmt.Sprintf("std::tuple<%s>", strings.Join(mult, ", "))
 	}
 
 	out(name, retType, strings.Join(params, ", "))
