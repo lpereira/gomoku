@@ -272,10 +272,6 @@ func (c *Compiler) toTypeSig(t types.Type) (string, error) {
 		return sig, err
 	}
 
-	if types.IsInterface(t) {
-		sig = fmt.Sprintf("std::shared_ptr<%s>", sig)
-	}
-
 	return sig, nil
 }
 
