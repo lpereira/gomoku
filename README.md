@@ -59,7 +59,7 @@ std::pair<double, double> corner(int i, int j) {
   z = f(x, y);
   sx = width / 2 + (x - y) * cos30 * xyscale;
   sy = height / 2 + (x + y) * sin30 * xyscale - z * zscale;
-  return std::pair<double, double>(sx, sy);
+  return {sx, sy};
 }
 ```
 

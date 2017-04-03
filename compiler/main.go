@@ -1053,22 +1053,7 @@ func (c *Compiler) genReturnStmt(r *ast.ReturnStmt) (err error) {
 		return c.walk(r.Results[0])
 	}
 
-	var types []string
-	for _, e := range r.Results {
-		typ, ok := c.inf.Types[e]
-		if !ok {
-			return fmt.Errorf("Couldn't determine type of expression")
-		}
-
-		ctyp, err := c.toTypeSig(typ.Type)
-		if err != nil {
-			return fmt.Errorf("Couldn't get type signature: %s", err)
-		}
-
-		types = append(types, ctyp)
-	}
-
-	fmt.Fprintf(c.output, "std::pair<%s>(", strings.Join(types, ", "))
+	fmt.Fprintf(c.output, "{")
 	for i, e := range r.Results {
 		if err = c.walk(e); err != nil {
 			return err
@@ -1078,7 +1063,7 @@ func (c *Compiler) genReturnStmt(r *ast.ReturnStmt) (err error) {
 			fmt.Fprint(c.output, ", ")
 		}
 	}
-	fmt.Fprintf(c.output, ")")
+	fmt.Fprintf(c.output, "}")
 
 	return nil
 }
