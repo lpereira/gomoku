@@ -27,6 +27,37 @@ type Compiler struct {
 
 	input io.Reader
 	output io.Writer
+
+	recvs VarStack
+}
+
+type VarStack struct {
+	vars  []*types.Var
+	count int
+}
+
+func (s *VarStack) Push(v *types.Var) {
+	s.vars = append(s.vars[:s.count], v)
+	s.count++
+}
+
+func (s *VarStack) Pop() *types.Var {
+	if s.count == 0 {
+		return nil
+	}
+	s.count--
+	return s.vars[s.count]
+}
+
+func (s *VarStack) Curr() *types.Var { return s.vars[s.count-1] }
+
+func (s *VarStack) Lookup(name string) *types.Var {
+	for cur := s.count - 1; cur >= 0; cur-- {
+		if v := s.vars[cur]; v != nil && name == v.Name() {
+			return s.vars[cur]
+		}
+	}
+	return nil
 }
 
 func NewCompiler(in io.Reader, out io.Writer) (*Compiler, error) {
@@ -735,6 +766,9 @@ func (c *Compiler) genFuncDecl(f *ast.FuncDecl) (err error) {
 
 	fmt.Println("{")
 
+	c.recvs.Push(recv)
+	defer c.recvs.Pop()
+
 	err = c.genScopeVars(f.Type, func(name string) bool {
 		if recv != nil && recv.Name() == name {
 			return false
@@ -862,10 +896,18 @@ func (c *Compiler) genSelectorExpr(s *ast.SelectorExpr) error {
 		return fmt.Errorf("Sel not found for X: %s", s)
 	}
 
-	if pkg := obj.Pkg(); pkg != nil {
+	ident := s.X.(*ast.Ident)
+	if pkg := obj.Pkg(); pkg != nil && pkg.Name() == ident.Name {
 		fmt.Fprintf(c.output, "%s::%s", pkg.Name(), s.Sel.Name)
+		return nil
 	}
 
+	if this := c.recvs.Lookup(ident.Name); this != nil {
+		fmt.Fprintf(c.output, "this->%s", s.Sel.Name)
+		return nil
+	}
+
+	fmt.Fprintf(c.output, "%s.%s", ident.Name, s.Sel.Name)
 	return nil
 }
 

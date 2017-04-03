@@ -5,11 +5,12 @@ type Interfacer interface {
 }
 
 type Foo struct {
-	someInt int
+	SomeInt int
 }
 
 func (f Foo) Interface() int {
-	return f.someInt
+	var f2 Foo
+	return f2.SomeInt * f.ConcreteMethod()
 }
 
 func (f Foo) ConcreteMethod() int { return 42 }
