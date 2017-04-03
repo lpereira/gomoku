@@ -190,6 +190,14 @@ func (c *Compiler) toTypeSig(t types.Type) (string, error) {
 
 			return fmt.Sprintf("moku::slice<%s>", s), nil
 
+		case *types.Array:
+			s, err := c.toTypeSig(typ.Elem())
+			if err != nil {
+				return "", err
+			}
+
+			return fmt.Sprintf("std::vector<%s>", s), nil
+
 		case *types.Pointer:
 			s, err := c.toTypeSig(typ.Elem())
 			if err != nil {
@@ -285,7 +293,9 @@ func (c *Compiler) toNilVal(t types.Type) (string, error) {
 		case *types.Pointer, *types.Signature:
 			return "std::nullptr", nil
 
-		case *types.Slice, *types.Chan, *types.Interface, *types.Named:
+		case *types.Slice, *types.Chan,
+			*types.Interface, *types.Named, *types.Array:
+
 			return "", nil
 		}
 
@@ -1152,10 +1162,44 @@ func (c *Compiler) genBranchStmt(b *ast.BranchStmt) (err error) {
 	return nil
 }
 
+func (c *Compiler) genArrayType(a *ast.ArrayType) (err error) {
+	if a.Len == nil {
+		fmt.Fprintf(c.output, "moku::slice<")
+	} else {
+		fmt.Fprintf(c.output, "std::vector<")
+	}
+
+	// FIXME underlying type
+	if err = c.walk(a.Elt); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(c.output, ">")
+	return nil
+}
+
+func (c *Compiler) genIndexExpr(i *ast.IndexExpr) (err error) {
+	if err = c.walk(i.X); err != nil {
+		return err
+	}
+	fmt.Fprintf(c.output, "[")
+	if err = c.walk(i.Index); err != nil {
+		return err
+	}
+	fmt.Fprintf(c.output, "]")
+	return nil
+}
+
 func (c *Compiler) walk(node ast.Node) error {
 	switch n := node.(type) {
 	default:
 		return fmt.Errorf("Unknown node type: %s\n", reflect.TypeOf(n))
+
+	case *ast.IndexExpr:
+		return c.genIndexExpr(n)
+
+	case *ast.ArrayType:
+		return c.genArrayType(n)
 
 	case *ast.IncDecStmt:
 		return c.genIncDecStmt(n)
