@@ -293,7 +293,7 @@ func (c *Compiler) toNilVal(t types.Type) (string, error) {
 		case *types.Pointer, *types.Signature:
 			return "std::nullptr", nil
 
-		case *types.Slice, *types.Chan,
+		case *types.Slice, *types.Map, *types.Chan,
 			*types.Interface, *types.Named, *types.Array:
 
 			return "", nil
@@ -642,6 +642,18 @@ func (c *Compiler) genExpr(x ast.Expr) (string, error) {
 	switch x := x.(type) {
 	default:
 		return "", fmt.Errorf("Couldn't generate expression with type: %s", reflect.TypeOf(x))
+
+	case *ast.MapType:
+		k, err := c.genExpr(x.Key)
+		if err != nil {
+			return "", err
+		}
+		v, err := c.genExpr(x.Value)
+		if err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf("std::map<%s, %s>", k, v), nil
 
 	case *ast.CallExpr:
 		fun, err := c.genExpr(x.Fun)
