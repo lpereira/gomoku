@@ -1338,10 +1338,20 @@ func (c *Compiler) genIfStmt(gen *nodeGen, i *ast.IfStmt) (err error) {
 	return nil
 }
 
+func (c *Compiler) genUnaryExpr(gen *nodeGen, u *ast.UnaryExpr) (err error) {
+	if expr, err := c.genExpr(u.X); err == nil {
+		fmt.Fprint(gen.out, "%s%s", u.Op, expr)
+	}
+	return err
+}
+
 func (c *Compiler) walk(gen *nodeGen, node ast.Node) error {
 	switch n := node.(type) {
 	default:
 		return fmt.Errorf("Unknown node type: %s\n", reflect.TypeOf(n))
+
+	case *ast.UnaryExpr:
+		return c.genUnaryExpr(gen, n)
 
 	case *ast.IfStmt:
 		return c.genIfStmt(gen, n)
