@@ -746,12 +746,16 @@ func (c *Compiler) genMain() (err error) {
 	return nil
 }
 
-func (c *Compiler) genComment(comment *ast.Comment) error {
-	fmt.Fprintf(c.output, "/* %s */", comment.Text)
+type nodeGen struct {
+	out io.Writer
+}
+
+func (c *Compiler) genComment(gen *nodeGen, comment *ast.Comment) error {
+	fmt.Fprintf(gen.out, "/* %s */", comment.Text)
 	return nil
 }
 
-func (c *Compiler) genFuncDecl(f *ast.FuncDecl) (err error) {
+func (c *Compiler) genFuncDecl(gen *nodeGen, f *ast.FuncDecl) (err error) {
 	var typ types.Object
 	typ, ok := c.inf.Defs[f.Name]
 	if !ok {
@@ -771,13 +775,13 @@ func (c *Compiler) genFuncDecl(f *ast.FuncDecl) (err error) {
 			typ := recv.Type().(*types.Named).Obj().Name()
 			name = fmt.Sprintf("%s::%s", typ, name)
 		}
-		fmt.Fprintf(c.output, "%s %s(%s)\n", retType, name, params)
+		fmt.Fprintf(gen.out, "%s %s(%s)\n", retType, name, params)
 	})
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintln(c.output, "{")
+	fmt.Fprintln(gen.out, "{")
 
 	c.recvs.Push(recv)
 	defer c.recvs.Pop()
@@ -799,110 +803,110 @@ func (c *Compiler) genFuncDecl(f *ast.FuncDecl) (err error) {
 		return err
 	}
 
-	if err = c.genBlockStmt(f.Body); err != nil {
+	if err = c.genBlockStmt(gen, f.Body); err != nil {
 		return err
 	}
 
-	fmt.Fprintln(c.output, "}")
+	fmt.Fprintln(gen.out, "}")
 
 	return err
 }
 
-func (c *Compiler) genAssignStmt(a *ast.AssignStmt) (err error) {
+func (c *Compiler) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
 	if len(a.Lhs) == 1 {
-		if err = c.walk(a.Lhs[0]); err != nil {
+		if err = c.walk(gen, a.Lhs[0]); err != nil {
 			return err
 		}
 	} else {
-		fmt.Fprint(c.output, "std::tie(")
+		fmt.Fprint(gen.out, "std::tie(")
 		for i, e := range a.Lhs {
-			if err = c.walk(e); err != nil {
+			if err = c.walk(gen, e); err != nil {
 				return err
 			}
 			if i < len(a.Lhs)-1 {
-				fmt.Fprint(c.output, ", ")
+				fmt.Fprint(gen.out, ", ")
 			}
 		}
-		fmt.Fprint(c.output, ")")
+		fmt.Fprint(gen.out, ")")
 	}
 
 	switch a.Tok {
 	case token.ADD_ASSIGN:
-		fmt.Fprint(c.output, " += ")
+		fmt.Fprint(gen.out, " += ")
 	case token.SUB_ASSIGN:
-		fmt.Fprint(c.output, " -= ")
+		fmt.Fprint(gen.out, " -= ")
 	case token.MUL_ASSIGN:
-		fmt.Fprint(c.output, " *= ")
+		fmt.Fprint(gen.out, " *= ")
 	case token.QUO_ASSIGN:
-		fmt.Fprint(c.output, " *= ")
+		fmt.Fprint(gen.out, " *= ")
 	case token.REM_ASSIGN:
-		fmt.Fprint(c.output, " %= ")
+		fmt.Fprint(gen.out, " %= ")
 	case token.AND_ASSIGN:
-		fmt.Fprint(c.output, " &= ")
+		fmt.Fprint(gen.out, " &= ")
 	case token.OR_ASSIGN:
-		fmt.Fprint(c.output, " |= ")
+		fmt.Fprint(gen.out, " |= ")
 	case token.XOR_ASSIGN:
-		fmt.Fprint(c.output, " ^= ")
+		fmt.Fprint(gen.out, " ^= ")
 	case token.SHL_ASSIGN:
-		fmt.Fprint(c.output, " <<= ")
+		fmt.Fprint(gen.out, " <<= ")
 	case token.SHR_ASSIGN:
-		fmt.Fprint(c.output, " >>= ")
+		fmt.Fprint(gen.out, " >>= ")
 	case token.AND_NOT_ASSIGN:
-		fmt.Fprint(c.output, " &= ~(")
+		fmt.Fprint(gen.out, " &= ~(")
 	case token.ASSIGN, token.DEFINE:
-		fmt.Fprint(c.output, " = ")
+		fmt.Fprint(gen.out, " = ")
 	default:
 		return fmt.Errorf("Unknown assignment token")
 	}
 
 	for _, e := range a.Rhs {
-		if err = c.walk(e); err != nil {
+		if err = c.walk(gen, e); err != nil {
 			return err
 		}
 	}
 
 	if a.Tok == token.AND_NOT_ASSIGN {
-		fmt.Fprint(c.output, ")")
+		fmt.Fprint(gen.out, ")")
 	}
 
 	return nil
 }
 
-func (c *Compiler) genIdent(i *ast.Ident) error {
-	fmt.Fprint(c.output, i.Name)
+func (c *Compiler) genIdent(gen *nodeGen, i *ast.Ident) error {
+	fmt.Fprint(gen.out, i.Name)
 	return nil
 }
 
-func (c *Compiler) genCallExpr(call *ast.CallExpr) (err error) {
+func (c *Compiler) genCallExpr(gen *nodeGen, call *ast.CallExpr) (err error) {
 	var cppTyp bool
 	if ident, ok := call.Fun.(*ast.Ident); ok {
 		if bk, ok := goTypeToBasic[ident.Name]; ok {
-			fmt.Fprint(c.output, basicTypeToCpp[bk].typ)
+			fmt.Fprint(gen.out, basicTypeToCpp[bk].typ)
 			cppTyp = true
 		}
 	}
 
 	if !cppTyp {
-		if err = c.walk(call.Fun); err != nil {
+		if err = c.walk(gen, call.Fun); err != nil {
 			return err
 		}
 	}
 
-	fmt.Fprintf(c.output, "(")
+	fmt.Fprintf(gen.out, "(")
 	for i, arg := range call.Args {
-		if err = c.walk(arg); err != nil {
+		if err = c.walk(gen, arg); err != nil {
 			return err
 		}
 		if i != len(call.Args)-1 {
-			fmt.Fprintf(c.output, ", ")
+			fmt.Fprintf(gen.out, ", ")
 		}
 	}
-	fmt.Fprintf(c.output, ")")
+	fmt.Fprintf(gen.out, ")")
 
 	return nil
 }
 
-func (c *Compiler) genSelectorExpr(s *ast.SelectorExpr) error {
+func (c *Compiler) genSelectorExpr(gen *nodeGen, s *ast.SelectorExpr) error {
 	var obj types.Object
 	obj, ok := c.inf.Uses[s.Sel]
 	if !ok {
@@ -911,26 +915,26 @@ func (c *Compiler) genSelectorExpr(s *ast.SelectorExpr) error {
 
 	ident := s.X.(*ast.Ident)
 	if pkg := obj.Pkg(); pkg != nil && pkg.Name() == ident.Name {
-		fmt.Fprintf(c.output, "%s::%s", pkg.Name(), s.Sel.Name)
+		fmt.Fprintf(gen.out, "%s::%s", pkg.Name(), s.Sel.Name)
 		return nil
 	}
 
 	if this := c.recvs.Lookup(ident.Name); this != nil {
-		fmt.Fprintf(c.output, "this->%s", s.Sel.Name)
+		fmt.Fprintf(gen.out, "this->%s", s.Sel.Name)
 		return nil
 	}
 
-	fmt.Fprintf(c.output, "%s.%s", ident.Name, s.Sel.Name)
+	fmt.Fprintf(gen.out, "%s.%s", ident.Name, s.Sel.Name)
 	return nil
 }
 
-func (c *Compiler) genBasicLit(b *ast.BasicLit) error {
+func (c *Compiler) genBasicLit(gen *nodeGen, b *ast.BasicLit) error {
 	switch b.Kind {
 	default:
-		return fmt.Errorf("Unknown basic literal type: %s", b)
+		return fmt.Errorf("Unknown basic literal type: %+v", b)
 
 	case token.INT, token.FLOAT, token.CHAR, token.STRING:
-		fmt.Fprintf(c.output, "%s", b.Value)
+		fmt.Fprintf(gen.out, "%s", b.Value)
 		return nil
 
 	case token.IMAG:
@@ -938,8 +942,8 @@ func (c *Compiler) genBasicLit(b *ast.BasicLit) error {
 	}
 }
 
-func (c *Compiler) genForStmt(f *ast.ForStmt) (err error) {
-	fmt.Fprintf(c.output, "{")
+func (c *Compiler) genForStmt(gen *nodeGen, f *ast.ForStmt) (err error) {
+	fmt.Fprintf(gen.out, "{")
 
 	scope, ok := c.inf.Scopes[f]
 	if !ok {
@@ -953,50 +957,50 @@ func (c *Compiler) genForStmt(f *ast.ForStmt) (err error) {
 		}
 	}
 
-	fmt.Fprintf(c.output, "for (")
+	fmt.Fprintf(gen.out, "for (")
 
 	if f.Init != nil {
-		if err = c.walk(f.Init); err != nil {
+		if err = c.walk(gen, f.Init); err != nil {
 			return err
 		}
 	}
 
-	fmt.Fprintf(c.output, "; ")
+	fmt.Fprintf(gen.out, "; ")
 	if f.Cond != nil {
-		if err = c.walk(f.Cond); err != nil {
+		if err = c.walk(gen, f.Cond); err != nil {
 			return err
 		}
 	}
 
-	fmt.Fprintf(c.output, "; ")
+	fmt.Fprintf(gen.out, "; ")
 	if f.Post != nil {
-		if err = c.walk(f.Post); err != nil {
+		if err = c.walk(gen, f.Post); err != nil {
 			return err
 		}
 	}
 
-	fmt.Fprintf(c.output, ") {")
+	fmt.Fprintf(gen.out, ") {")
 	if err = c.genScopeVars(f.Body, noNameFilter); err != nil {
 		return err
 	}
-	if err = c.genBlockStmt(f.Body); err != nil {
+	if err = c.genBlockStmt(gen, f.Body); err != nil {
 		return err
 	}
-	fmt.Fprintf(c.output, "}")
+	fmt.Fprintf(gen.out, "}")
 
-	fmt.Fprintf(c.output, "}")
+	fmt.Fprintf(gen.out, "}")
 
 	return nil
 }
 
-func (c *Compiler) genBlockStmt(blk *ast.BlockStmt) (err error) {
+func (c *Compiler) genBlockStmt(gen *nodeGen, blk *ast.BlockStmt) (err error) {
 	for _, stmt := range blk.List {
-		if err = c.walk(stmt); err != nil {
+		if err = c.walk(gen, stmt); err != nil {
 			return err
 		}
 		switch stmt.(type) {
 		default:
-			fmt.Fprintln(c.output, ";")
+			fmt.Fprintln(gen.out, ";")
 
 		case *ast.ForStmt, *ast.DeclStmt:
 		}
@@ -1020,81 +1024,76 @@ func (c *Compiler) genScopeVars(node ast.Node, filter func(name string) bool) (e
 	return nil
 }
 
-func (c *Compiler) genExprStmt(e *ast.ExprStmt) error {
-	return c.walk(e.X)
+func (c *Compiler) genExprStmt(gen *nodeGen, e *ast.ExprStmt) error {
+	return c.walk(gen, e.X)
 }
 
-func (c *Compiler) genBinaryExpr(b *ast.BinaryExpr) (err error) {
-	if err = c.walk(b.X); err != nil {
+func (c *Compiler) genBinaryExpr(gen *nodeGen, b *ast.BinaryExpr) (err error) {
+	if err = c.walk(gen, b.X); err != nil {
 		return err
 	}
-	fmt.Fprintf(c.output, " %s ", b.Op)
-	return c.walk(b.Y)
+	fmt.Fprintf(gen.out, " %s ", b.Op)
+	return c.walk(gen, b.Y)
 }
 
-func (c *Compiler) genField(f *ast.Field) error {
-	fmt.Fprintf(c.output, "// field %+v\n", f)
+func (c *Compiler) genField(gen *nodeGen, f *ast.Field) error {
+	fmt.Fprintf(gen.out, "// field %+v\n", f)
 	return nil
 }
 
-func (c *Compiler) genField(f *ast.Field) error {
-	fmt.Fprintf(c.output, "// field %s\n", f)
-	return nil
-}
-
-func (c *Compiler) genReturnStmt(r *ast.ReturnStmt) (err error) {
-	fmt.Fprintf(c.output, "return ")
+func (c *Compiler) genReturnStmt(gen *nodeGen, r *ast.ReturnStmt) (err error) {
+	fmt.Fprintf(gen.out, "return ")
 
 	if len(r.Results) == 1 {
-		return c.walk(r.Results[0])
+		return c.walk(gen, r.Results[0])
 	}
 
-	fmt.Fprintf(c.output, "{")
+	fmt.Fprintf(gen.out, "{")
 	for i, e := range r.Results {
-		if err = c.walk(e); err != nil {
+		if err = c.walk(gen, e); err != nil {
 			return err
 		}
 
 		if i != len(r.Results)-1 {
-			fmt.Fprint(c.output, ", ")
+			fmt.Fprint(gen.out, ", ")
 		}
 	}
-	fmt.Fprintf(c.output, "}")
+	fmt.Fprintf(gen.out, "}")
 
 	return nil
 }
 
-func (c *Compiler) genCompositeLit(cl *ast.CompositeLit) (err error) {
+func (c *Compiler) genCompositeLit(gen *nodeGen, cl *ast.CompositeLit) (err error) {
 	if cl.Type != nil {
-		if err = c.walk(cl.Type); err != nil {
+		if err = c.walk(gen, cl.Type); err != nil {
 			return err
 		}
 	}
 
-	fmt.Fprintf(c.output, "{")
+	fmt.Fprintf(gen.out, "{")
 	for i, elt := range cl.Elts {
-		if err = c.walk(elt); err != nil {
+		if err = c.walk(gen, elt); err != nil {
 			return err
 		}
 		if i < len(cl.Elts)-1 {
-			fmt.Fprint(c.output, ", ")
+			fmt.Fprint(gen.out, ", ")
 		}
 	}
-	fmt.Fprintf(c.output, "}")
+	fmt.Fprintf(gen.out, "}")
 	return nil
 }
 
-func (c *Compiler) genParenExpr(p *ast.ParenExpr) (err error) {
-	fmt.Fprint(c.output, "(")
-	if err = c.walk(p.X); err != nil {
+func (c *Compiler) genParenExpr(gen *nodeGen, p *ast.ParenExpr) (err error) {
+	fmt.Fprint(gen.out, "(")
+	if err = c.walk(gen, p.X); err != nil {
 		return err
 	}
-	fmt.Fprint(c.output, ")")
+	fmt.Fprint(gen.out, ")")
 	return nil
 }
 
-func (c *Compiler) genIncDecStmt(p *ast.IncDecStmt) (err error) {
-	if err = c.walk(p.X); err != nil {
+func (c *Compiler) genIncDecStmt(gen *nodeGen, p *ast.IncDecStmt) (err error) {
+	if err = c.walk(gen, p.X); err != nil {
 		return err
 	}
 
@@ -1103,150 +1102,150 @@ func (c *Compiler) genIncDecStmt(p *ast.IncDecStmt) (err error) {
 		return fmt.Errorf("Unknown inc/dec token")
 
 	case token.INC:
-		fmt.Fprintf(c.output, "++")
+		fmt.Fprintf(gen.out, "++")
 
 	case token.DEC:
-		fmt.Fprintf(c.output, "--")
+		fmt.Fprintf(gen.out, "--")
 	}
 
 	return nil
 }
 
-func (c *Compiler) genCommentGroup(g *ast.CommentGroup) (err error) {
+func (c *Compiler) genCommentGroup(gen *nodeGen, g *ast.CommentGroup) (err error) {
 	for _, comment := range g.List {
-		if err = c.walk(comment); err != nil {
+		if err = c.walk(gen, comment); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c *Compiler) genLabeledStmt(l *ast.LabeledStmt) (err error) {
-	if err = c.walk(l.Label); err != nil {
+func (c *Compiler) genLabeledStmt(gen *nodeGen, l *ast.LabeledStmt) (err error) {
+	if err = c.walk(gen, l.Label); err != nil {
 		return err
 	}
-	fmt.Fprintf(c.output, ":\n")
+	fmt.Fprintf(gen.out, ":\n")
 	return nil
 }
 
-func (c *Compiler) genBranchStmt(b *ast.BranchStmt) (err error) {
+func (c *Compiler) genBranchStmt(gen *nodeGen, b *ast.BranchStmt) (err error) {
 	switch b.Tok {
 	case token.GOTO:
 		if b.Label == nil {
 			return fmt.Errorf("Goto without label")
 		}
-		fmt.Fprintf(c.output, "goto ")
-		if err = c.walk(b.Label); err != nil {
+		fmt.Fprintf(gen.out, "goto ")
+		if err = c.walk(gen, b.Label); err != nil {
 			return err
 		}
 	case token.BREAK:
 		if b.Label != nil {
 			return fmt.Errorf("Break with labels not supported yet")
 		}
-		fmt.Fprintf(c.output, "break")
+		fmt.Fprintf(gen.out, "break")
 	case token.CONTINUE:
 		if b.Label != nil {
 			return fmt.Errorf("Continue with labels not supported yet")
 		}
-		fmt.Fprintf(c.output, "continue")
+		fmt.Fprintf(gen.out, "continue")
 	case token.FALLTHROUGH:
 		return fmt.Errorf("Fallthrough not supported yet")
 	}
 	return nil
 }
 
-func (c *Compiler) genArrayType(a *ast.ArrayType) (err error) {
+func (c *Compiler) genArrayType(gen *nodeGen, a *ast.ArrayType) (err error) {
 	if a.Len == nil {
-		fmt.Fprintf(c.output, "moku::slice<")
+		fmt.Fprintf(gen.out, "moku::slice<")
 	} else {
-		fmt.Fprintf(c.output, "std::vector<")
+		fmt.Fprintf(gen.out, "std::vector<")
 	}
 
 	// FIXME underlying type
-	if err = c.walk(a.Elt); err != nil {
+	if err = c.walk(gen, a.Elt); err != nil {
 		return err
 	}
 
-	fmt.Fprintf(c.output, ">")
+	fmt.Fprintf(gen.out, ">")
 	return nil
 }
 
-func (c *Compiler) genIndexExpr(i *ast.IndexExpr) (err error) {
-	if err = c.walk(i.X); err != nil {
+func (c *Compiler) genIndexExpr(gen *nodeGen, i *ast.IndexExpr) (err error) {
+	if err = c.walk(gen, i.X); err != nil {
 		return err
 	}
 	fmt.Fprintf(c.output, "[")
-	if err = c.walk(i.Index); err != nil {
+	if err = c.walk(gen, i.Index); err != nil {
 		return err
 	}
-	fmt.Fprintf(c.output, "]")
+	fmt.Fprintf(gen.out, "]")
 	return nil
 }
 
-func (c *Compiler) walk(node ast.Node) error {
+func (c *Compiler) walk(gen *nodeGen, node ast.Node) error {
 	switch n := node.(type) {
 	default:
 		return fmt.Errorf("Unknown node type: %s\n", reflect.TypeOf(n))
 
 	case *ast.IndexExpr:
-		return c.genIndexExpr(n)
+		return c.genIndexExpr(gen, n)
 
 	case *ast.ArrayType:
-		return c.genArrayType(n)
+		return c.genArrayType(gen, n)
 
 	case *ast.IncDecStmt:
-		return c.genIncDecStmt(n)
+		return c.genIncDecStmt(gen, n)
 
 	case *ast.ParenExpr:
-		return c.genParenExpr(n)
+		return c.genParenExpr(gen, n)
 
 	case *ast.Comment:
-		return c.genComment(n)
+		return c.genComment(gen, n)
 
 	case *ast.CommentGroup:
-		return c.genCommentGroup(n)
+		return c.genCommentGroup(gen, n)
 
 	case *ast.FuncDecl:
-		return c.genFuncDecl(n)
+		return c.genFuncDecl(gen, n)
 
 	case *ast.AssignStmt:
-		return c.genAssignStmt(n)
+		return c.genAssignStmt(gen, n)
 
 	case *ast.Ident:
-		return c.genIdent(n)
+		return c.genIdent(gen, n)
 
 	case *ast.CallExpr:
-		return c.genCallExpr(n)
+		return c.genCallExpr(gen, n)
 
 	case *ast.SelectorExpr:
-		return c.genSelectorExpr(n)
+		return c.genSelectorExpr(gen, n)
 
 	case *ast.BasicLit:
-		return c.genBasicLit(n)
+		return c.genBasicLit(gen, n)
 
 	case *ast.ForStmt:
-		return c.genForStmt(n)
+		return c.genForStmt(gen, n)
 
 	case *ast.ExprStmt:
-		return c.genExprStmt(n)
+		return c.genExprStmt(gen, n)
 
 	case *ast.BinaryExpr:
-		return c.genBinaryExpr(n)
+		return c.genBinaryExpr(gen, n)
 
 	case *ast.Field:
-		return c.genField(n)
+		return c.genField(gen, n)
 
 	case *ast.ReturnStmt:
-		return c.genReturnStmt(n)
+		return c.genReturnStmt(gen, n)
 
 	case *ast.CompositeLit:
-		return c.genCompositeLit(n)
+		return c.genCompositeLit(gen, n)
 
 	case *ast.LabeledStmt:
-		return c.genLabeledStmt(n)
+		return c.genLabeledStmt(gen, n)
 
 	case *ast.BranchStmt:
-		return c.genBranchStmt(n)
+		return c.genBranchStmt(gen, n)
 
 	case *ast.GenDecl, *ast.DeclStmt:
 		return nil
@@ -1263,11 +1262,14 @@ func (c *Compiler) Compile() (err error) {
 	if err = c.genMain(); err != nil {
 		return err
 	}
+
+	gen := nodeGen{out: c.output}
 	for _, decl := range c.ast.Decls {
-		if err = c.walk(ast.Node(decl)); err != nil {
+		if err = c.walk(&gen, ast.Node(decl)); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
