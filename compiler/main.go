@@ -782,7 +782,7 @@ func (c *Compiler) genFuncDecl(f *ast.FuncDecl) (err error) {
 		return err
 	}
 
-	fmt.Println("{")
+	fmt.Fprintln(c.output, "{")
 
 	c.recvs.Push(recv)
 	defer c.recvs.Pop()
@@ -808,7 +808,7 @@ func (c *Compiler) genFuncDecl(f *ast.FuncDecl) (err error) {
 		return err
 	}
 
-	fmt.Println("}")
+	fmt.Fprintln(c.output, "}")
 
 	return err
 }
@@ -1001,7 +1001,7 @@ func (c *Compiler) genBlockStmt(blk *ast.BlockStmt) (err error) {
 		}
 		switch stmt.(type) {
 		default:
-			fmt.Println(";")
+			fmt.Fprintln(c.output, ";")
 
 		case *ast.ForStmt, *ast.DeclStmt:
 		}
