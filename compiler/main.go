@@ -892,7 +892,11 @@ func (c *Compiler) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
 }
 
 func (c *Compiler) genIdent(gen *nodeGen, i *ast.Ident) error {
-	fmt.Fprint(gen.out, i.Name)
+	if this := c.recvs.Lookup(i.Name); this != nil {
+		fmt.Fprint(gen.out, "this")
+	} else {
+		fmt.Fprint(gen.out, i.Name)
+	}
 	return nil
 }
 
