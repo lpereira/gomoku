@@ -18,8 +18,7 @@ work.  The generated code still doesn't compile: only the input program
 itself is generated, plus type information and constants from imported
 packages.  (No method from packages are generated yet.)
 
-No automated testing is performed.  Any help to move this forward is
-greatly appreciated.
+Any help to move this forward is greatly appreciated.
 
 # Sample code
 
@@ -137,8 +136,14 @@ output:
 
     gomoku < samples/interfaces/interfaces.go
 
+The generated code isn't indented, so it's recommended to pipe it through
+`clang-format`:
+
+    gomoku < samples/interfaces/interfaces.go | clang-format
+
 To generate type system debugging information instead of C++ code, pass
-the -debugtype command line flag.
+the -debugtype command line flag.  The output is very crude and only
+intended for those developing the compiler itself.
 
 # Moving forward
 
@@ -153,7 +158,7 @@ are way more challenging than others:
 - [ ] Implement type conversion
 - [ ] Implement basic Go data types (arrays, slices, and maps)
 - [ ] Closures / anonymous functions
-- [ ] Deferred statements
+- [x] Deferred statements
 - [ ] Range-based loops
 - [ ] Switch statement
 - [ ] Write a basic standard library for embedded devices
@@ -161,3 +166,39 @@ are way more challenging than others:
 - [ ] Perform escape analysis to determine where to allocate things
 - [ ] Channels (including select statement)
 - [ ] Goroutines
+
+# FAQ
+
+## What's with the name?
+
+Go is one of the oldest board games that are still played today.  Gomoku
+is a newer game, but is played with the same board and pieces.  The rules
+are different, but for the untrained eye, they look exactly the same.
+
+The parallels with the Go programming language and this compiler were too
+good to not make the pun.
+
+## Why not write an SSA backend for gc?
+
+That would be indeed a fun project -- but wouldn't solve the problem I'm
+interested in solving.  The compiler would still generate code that's
+suitable for a different kind of platform, and this would essentially
+just take care of the instruction set.  As it turns out, some of the
+platforms I'm interested are x86 microcontrollers, and most of their
+ISA is already supported by the existing gc backends.
+
+## Why not use the golang.org/x/tools/go/ssa package instead?
+
+I haven't looked at that package close enough.  It does state two things,
+though: it's not intended for machine code generation and has an interface
+that's likely to change.  Having said that, this package looks promising,
+and I might revisit this idea one day, when I learn more about SSA.
+
+In any case, I'm also very inexperienced in Go -- and writing a compiler
+for the language, instead of just generating code from higher-level nodes,
+is proving to a useful way to learn every nook and cranny.
+
+## What's the license? Is there any code of conduct?
+
+Nothing new here:  I'm adopting the same license as Go itself (see the 
+LICENSE file) and the same code of conduct that the community knows.
