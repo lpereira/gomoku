@@ -993,12 +993,16 @@ func (c *Compiler) genBasicLit(gen *nodeGen, b *ast.BasicLit) error {
 }
 
 func (c *Compiler) genForStmt(gen *nodeGen, f *ast.ForStmt) (err error) {
-	fmt.Fprintf(gen.out, "{")
-
 	scope, ok := c.inf.Scopes[f]
 	if !ok {
 		return fmt.Errorf("Could not find scope")
 	}
+
+	if len(scope.Names()) > 0 {
+		fmt.Fprintf(gen.out, "{")
+		defer fmt.Fprintf(gen.out, "}")
+	}
+
 	for _, name := range scope.Names() {
 		obj := scope.Lookup(name)
 		v := obj.(*types.Var)
@@ -1035,8 +1039,6 @@ func (c *Compiler) genForStmt(gen *nodeGen, f *ast.ForStmt) (err error) {
 	if err = c.genScopeAndBody(gen, f.Body, f.Body, filt); err != nil {
 		return err
 	}
-
-	fmt.Fprintf(gen.out, "}")
 
 	return nil
 }
