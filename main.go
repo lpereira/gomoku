@@ -15,7 +15,7 @@ func main() {
 	debugType := flag.Bool("debugtype", false, "Prints type system debugging information")
 	flag.Parse()
 
-	c, err := compiler.NewCompiler(os.Stdin, os.Stdout)
+	c, err := compiler.New(os.Stdin, os.Stdout)
 	if err != nil {
 		log.Fatalf("Could not create compiler: %s", err)
 	}

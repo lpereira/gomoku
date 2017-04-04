@@ -61,7 +61,7 @@ func (s *VarStack) Lookup(name string) *types.Var {
 	return nil
 }
 
-func NewCompiler(in io.Reader, out io.Writer) (*Compiler, error) {
+func New(in io.Reader, out io.Writer) (*Compiler, error) {
 	c := Compiler{
 		fset: token.NewFileSet(),
 		inf: types.Info{
