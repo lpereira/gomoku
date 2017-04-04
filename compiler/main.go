@@ -5,6 +5,7 @@
 package compiler
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/importer"
@@ -513,7 +514,7 @@ func (c *Compiler) genPrototype(name string, sig *types.Signature) error {
 	})
 }
 
-func (c *Compiler) genVar(v *types.Var, mainBlock bool) error {
+func (c *Compiler) genVar(gen *nodeGen, v *types.Var, mainBlock bool) error {
 	typ, err := c.toTypeSig(v.Type())
 	if err != nil {
 		return fmt.Errorf("Couldn't get type signature for variable: %s", err)
@@ -526,11 +527,11 @@ func (c *Compiler) genVar(v *types.Var, mainBlock bool) error {
 
 	if mainBlock {
 		if !v.Exported() {
-			fmt.Fprint(c.output, "static ")
+			fmt.Fprint(gen.out, "static ")
 		}
-		fmt.Fprintf(c.output, "%s %s;\n", typ, v.Name())
+		fmt.Fprintf(gen.out, "%s %s;\n", typ, v.Name())
 	} else {
-		fmt.Fprintf(c.output, "%s %s{%s};\n", typ, v.Name(), nilVal)
+		fmt.Fprintf(gen.out, "%s %s{%s};\n", typ, v.Name(), nilVal)
 	}
 
 	return nil
@@ -592,7 +593,8 @@ func (c *Compiler) genNamespace(p *types.Package, mainBlock bool) (err error) {
 				return err
 			}
 		case *types.Var:
-			if err = c.genVar(t, mainBlock); err != nil {
+			gen := nodeGen{out: c.output}
+			if err = c.genVar(&gen, t, mainBlock); err != nil {
 				return err
 			}
 		case *types.Const:
@@ -746,7 +748,8 @@ func (c *Compiler) genMain() (err error) {
 }
 
 type nodeGen struct {
-	out io.Writer
+	out      io.Writer
+	hasDefer bool
 }
 
 func (c *Compiler) genComment(gen *nodeGen, comment *ast.Comment) error {
@@ -780,12 +783,10 @@ func (c *Compiler) genFuncDecl(gen *nodeGen, f *ast.FuncDecl) (err error) {
 		return err
 	}
 
-	fmt.Fprintln(gen.out, "{")
-
 	c.recvs.Push(recv)
 	defer c.recvs.Pop()
 
-	err = c.genScopeVars(f.Type, func(name string) bool {
+	filt := func(name string) bool {
 		if recv != nil && recv.Name() == name {
 			return false
 		}
@@ -796,17 +797,12 @@ func (c *Compiler) genFuncDecl(gen *nodeGen, f *ast.FuncDecl) (err error) {
 				return false
 			}
 		}
+
 		return true
-	})
-	if err != nil {
+	}
+	if err = c.genScopeAndBody(gen, f.Body, f.Type, filt); err != nil {
 		return err
 	}
-
-	if err = c.genBlockStmt(gen, f.Body); err != nil {
-		return err
-	}
-
-	fmt.Fprintln(gen.out, "}")
 
 	return err
 }
@@ -951,7 +947,7 @@ func (c *Compiler) genForStmt(gen *nodeGen, f *ast.ForStmt) (err error) {
 	for _, name := range scope.Names() {
 		obj := scope.Lookup(name)
 		v := obj.(*types.Var)
-		if err = c.genVar(v, false); err != nil {
+		if err = c.genVar(gen, v, false); err != nil {
 			return err
 		}
 	}
@@ -978,14 +974,12 @@ func (c *Compiler) genForStmt(gen *nodeGen, f *ast.ForStmt) (err error) {
 		}
 	}
 
-	fmt.Fprintf(gen.out, ") {")
-	if err = c.genScopeVars(f.Body, noNameFilter); err != nil {
+	fmt.Fprintf(gen.out, ")")
+
+	filt := func(name string) bool { return true }
+	if err = c.genScopeAndBody(gen, f.Body, f.Body, filt); err != nil {
 		return err
 	}
-	if err = c.genBlockStmt(gen, f.Body); err != nil {
-		return err
-	}
-	fmt.Fprintf(gen.out, "}")
 
 	fmt.Fprintf(gen.out, "}")
 
@@ -1007,15 +1001,38 @@ func (c *Compiler) genBlockStmt(gen *nodeGen, blk *ast.BlockStmt) (err error) {
 	return nil
 }
 
-func noNameFilter(name string) bool { return true }
+func (c *Compiler) genScopeAndBody(gen *nodeGen, block *ast.BlockStmt, scope ast.Node, filter func(name string) bool) (err error) {
+	fmt.Fprint(gen.out, "{")
 
-func (c *Compiler) genScopeVars(node ast.Node, filter func(name string) bool) (err error) {
+	blockGen := nodeGen{out: new(bytes.Buffer)}
+	if err = c.genBlockStmt(&blockGen, block); err != nil {
+		return err
+	}
+
+	varGen := nodeGen{out: new(bytes.Buffer), hasDefer: blockGen.hasDefer}
+	if err = c.genScopeVars(&varGen, scope, filter); err != nil {
+		return err
+	}
+
+	fmt.Fprintln(gen.out, varGen.out.(*bytes.Buffer).String())
+	fmt.Fprintln(gen.out, blockGen.out.(*bytes.Buffer).String())
+
+	fmt.Fprintln(gen.out, "}")
+
+	return nil
+}
+
+func (c *Compiler) genScopeVars(gen *nodeGen, node ast.Node, filter func(name string) bool) (err error) {
+	if _, ok := node.(*ast.FuncType); ok && gen.hasDefer {
+		fmt.Fprintf(c.output, "moku::defer _defer_;\n")
+	}
+
 	if scope, ok := c.inf.Scopes[node]; ok {
 		for _, name := range scope.Names() {
 			if !filter(name) {
 				continue
 			}
-			if err = c.genVar(scope.Lookup(name).(*types.Var), false); err != nil {
+			if err = c.genVar(gen, scope.Lookup(name).(*types.Var), false); err != nil {
 				return err
 			}
 		}
@@ -1181,10 +1198,27 @@ func (c *Compiler) genIndexExpr(gen *nodeGen, i *ast.IndexExpr) (err error) {
 	return nil
 }
 
+func (c *Compiler) genDeferStmt(gen *nodeGen, d *ast.DeferStmt) (err error) {
+	fmt.Fprintf(gen.out, "_defer_.Push([]() {")
+
+	if err = c.walk(gen, d.Call); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(gen.out, "})")
+
+	gen.hasDefer = true
+
+	return nil
+}
+
 func (c *Compiler) walk(gen *nodeGen, node ast.Node) error {
 	switch n := node.(type) {
 	default:
 		return fmt.Errorf("Unknown node type: %s\n", reflect.TypeOf(n))
+
+	case *ast.DeferStmt:
+		return c.genDeferStmt(gen, n)
 
 	case *ast.IndexExpr:
 		return c.genIndexExpr(gen, n)

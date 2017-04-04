@@ -106,6 +106,30 @@ int Foo::ConcreteMethod() { return 42; }
 int UsingInterfaceType(Interfacer i) { return i.Interface() * 1234; }
 ```
 
+## defer1 (chapter 5 of the same book)
+
+### Go
+
+```Go
+func f(x int) {
+        fmt.Printf("f(%d)\n", x+0/x) // panics if x == 0
+        defer fmt.Printf("defer %d\n", x)
+        f(x - 1)
+}
+```
+
+### C++
+
+```C++
+void f(int x) {
+  moku::defer _defer_;
+
+  fmt::Printf("f(%d)\n", x + 0 / x);
+  _defer_.Push([]() { fmt::Printf("defer %d\n", x) });
+  f(x - 1);
+}
+```
+
 # Usage
 
 The program is parsed from the standard input and written to the standard
