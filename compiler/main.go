@@ -691,7 +691,6 @@ func (c *Compiler) genExpr(x ast.Expr) (string, error) {
 	case *ast.Ident:
 		return x.Name, nil
 	}
-	return "", nil
 }
 
 func (c *Compiler) genInit() bool {
