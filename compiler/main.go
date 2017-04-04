@@ -814,7 +814,7 @@ func (c *Compiler) genFuncDecl(gen *nodeGen, f *ast.FuncDecl) (err error) {
 
 		return true
 	}
-	if err = c.genScopeAndBody(gen, f.Body, f.Type, filt); err != nil {
+	if err = c.genScopeAndBody(gen, f.Body, f.Type, true, filt); err != nil {
 		return err
 	}
 
@@ -1032,7 +1032,7 @@ func (c *Compiler) genForStmt(gen *nodeGen, f *ast.ForStmt) (err error) {
 	fmt.Fprintf(gen.out, ")")
 
 	filt := func(name string) bool { return true }
-	if err = c.genScopeAndBody(gen, f.Body, f.Body, filt); err != nil {
+	if err = c.genScopeAndBody(gen, f.Body, f.Body, true, filt); err != nil {
 		return err
 	}
 
@@ -1048,14 +1048,17 @@ func (c *Compiler) genBlockStmt(gen *nodeGen, blk *ast.BlockStmt) (err error) {
 		default:
 			fmt.Fprintln(gen.out, ";")
 
-		case *ast.ForStmt, *ast.DeclStmt:
+		case *ast.ForStmt, *ast.DeclStmt, *ast.IfStmt:
 		}
 	}
 	return nil
 }
 
-func (c *Compiler) genScopeAndBody(gen *nodeGen, block *ast.BlockStmt, scope ast.Node, filter func(name string) bool) (err error) {
-	fmt.Fprint(gen.out, "{")
+func (c *Compiler) genScopeAndBody(gen *nodeGen, block *ast.BlockStmt, scope ast.Node, newScope bool, filter func(name string) bool) (err error) {
+	if newScope {
+		fmt.Fprint(gen.out, "{")
+		defer fmt.Fprintln(gen.out, "}")
+	}
 
 	blockGen := nodeGen{out: new(bytes.Buffer)}
 	if err = c.genBlockStmt(&blockGen, block); err != nil {
@@ -1069,8 +1072,6 @@ func (c *Compiler) genScopeAndBody(gen *nodeGen, block *ast.BlockStmt, scope ast
 
 	fmt.Fprintln(gen.out, varGen.out.(*bytes.Buffer).String())
 	fmt.Fprintln(gen.out, blockGen.out.(*bytes.Buffer).String())
-
-	fmt.Fprintln(gen.out, "}")
 
 	return nil
 }
@@ -1306,10 +1307,44 @@ func (c *Compiler) genSliceExpr(gen *nodeGen, s *ast.SliceExpr) (err error) {
 	return nil
 }
 
+func (c *Compiler) genIfStmt(gen *nodeGen, i *ast.IfStmt) (err error) {
+	if i.Init != nil {
+		fmt.Fprint(gen.out, "{")
+		defer fmt.Fprint(gen.out, "}")
+
+		blk := ast.BlockStmt{List: []ast.Stmt{i.Init}}
+		filt := func(name string) bool { return true }
+		if err = c.genScopeAndBody(gen, &blk, i, false, filt); err != nil {
+			return err
+		}
+	}
+
+	fmt.Fprintf(gen.out, "if (")
+	if err = c.walk(gen, i.Cond); err != nil {
+		return err
+	}
+	fmt.Fprintf(gen.out, ") {")
+	if err = c.genBlockStmt(gen, i.Body); err != nil {
+		return err
+	}
+
+	if i.Else != nil {
+		fmt.Fprintf(gen.out, "} else {")
+		if err = c.walk(gen, i.Else); err != nil {
+			return err
+		}
+	}
+	fmt.Fprintf(gen.out, "}")
+	return nil
+}
+
 func (c *Compiler) walk(gen *nodeGen, node ast.Node) error {
 	switch n := node.(type) {
 	default:
 		return fmt.Errorf("Unknown node type: %s\n", reflect.TypeOf(n))
+
+	case *ast.IfStmt:
+		return c.genIfStmt(gen, n)
 
 	case *ast.SliceExpr:
 		return c.genSliceExpr(gen, n)
