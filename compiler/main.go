@@ -1233,7 +1233,7 @@ func (c *Compiler) genDeferStmt(gen *nodeGen, d *ast.DeferStmt) (err error) {
 		return err
 	}
 
-	fmt.Fprintf(gen.out, "})")
+	fmt.Fprintf(gen.out, "; })")
 
 	gen.hasDefer = true
 

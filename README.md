@@ -124,7 +124,7 @@ void f(int x) {
   moku::defer _defer_;
 
   fmt::Printf("f(%d)\n", x + 0 / x);
-  _defer_.Push([]() { fmt::Printf("defer %d\n", x) });
+  _defer_.Push([]() { fmt::Printf("defer %d\n", x); });
   f(x - 1);
 }
 ```
