@@ -17,8 +17,17 @@ func (f Foo) ConcreteMethod() int { return 42 }
 
 func UsingInterfaceType(i Interfacer) int { return i.Interface() * 1234 }
 
+type MyBasicType int
+
+func (mbt MyBasicType) Interface() int {
+	return int(mbt)
+}
+
 func main() {
 	var f Foo
 	println(f.Interface())
 	println(f.ConcreteMethod())
+
+	var m MyBasicType
+	UsingInterfaceType(m)
 }

@@ -379,9 +379,7 @@ func (c *Compiler) genInterface(name string, iface *types.Interface) (err error)
 	return err
 }
 
-func (c *Compiler) genStruct(name string, s *types.Struct, n *types.Named) (err error) {
-	fmt.Fprintf(c.output, "struct %s", name)
-
+func (c *Compiler) genIfaceForType(n *types.Named, out func(ifaces []string) error) (err error) {
 	// FIXME: this is highly inneficient and won't scale at all
 	var ifaces []string
 	ifaceMeths := make(map[string]struct{})
@@ -414,31 +412,9 @@ func (c *Compiler) genStruct(name string, s *types.Struct, n *types.Named) (err 
 			}
 		}
 	}
-	if ifaces != nil {
-		fmt.Fprintf(c.output, " : %s", strings.Join(ifaces, ", "))
-	}
 
-	fmt.Fprint(c.output, " {\n")
-	numFields := s.NumFields()
-	for f := 0; f < numFields; f++ {
-		f := s.Field(f)
-
-		typ, err := c.toTypeSig(f.Type())
-		if err != nil {
-			return fmt.Errorf("Couldn't generate field: %s", err)
-		}
-
-		nilVal, err := c.toNilVal(f.Type())
-		if err != nil {
-			return fmt.Errorf("Couldn't determine nil value for %s: %s", name, err)
-		}
-
-		if nilVal != "" {
-			fmt.Fprintf(c.output, "%s %s{%s};\n", typ, f.Name(), nilVal)
-			continue
-		}
-
-		fmt.Fprintf(c.output, "%s %s;\n", typ, f.Name())
+	if err = out(ifaces); err != nil {
+		return err
 	}
 
 	mset := types.NewMethodSet(n)
@@ -465,24 +441,76 @@ func (c *Compiler) genStruct(name string, s *types.Struct, n *types.Named) (err 
 		}
 	}
 
+	return nil
+}
+
+func (c *Compiler) genStruct(name string, s *types.Struct, n *types.Named) (err error) {
+	fmt.Fprintf(c.output, "struct %s", name)
+
+	fun := func(ifaces []string) error {
+		if ifaces != nil {
+			fmt.Fprintf(c.output, " : %s", strings.Join(ifaces, ", "))
+		}
+
+		fmt.Fprint(c.output, " {\n")
+		numFields := s.NumFields()
+		for f := 0; f < numFields; f++ {
+			f := s.Field(f)
+
+			typ, err := c.toTypeSig(f.Type())
+			if err != nil {
+				return fmt.Errorf("Couldn't generate field: %s", err)
+			}
+
+			nilVal, err := c.toNilVal(f.Type())
+			if err != nil {
+				return fmt.Errorf("Couldn't determine nil value for %s: %s", name, err)
+			}
+
+			if nilVal != "" {
+				fmt.Fprintf(c.output, "%s %s{%s};\n", typ, f.Name(), nilVal)
+				continue
+			}
+
+			fmt.Fprintf(c.output, "%s %s;\n", typ, f.Name())
+		}
+		return nil
+	}
+	if err = c.genIfaceForType(n, fun); err != nil {
+		return err
+	}
+
 	fmt.Fprintf(c.output, "};\n")
 
 	return nil
 }
 
-func (c *Compiler) genBasicType(name string, b *types.Basic) (err error) {
-	typ, err := c.toTypeSig(b.Underlying())
-	if err != nil {
-		return fmt.Errorf("Could not determine underlying type: %s", err)
+func (c *Compiler) genBasicType(name string, b *types.Basic, n *types.Named) (err error) {
+	fmt.Fprintf(c.output, "struct %s", name)
+	fun := func(ifaces []string) error {
+		typ, err := c.toTypeSig(b.Underlying())
+		if err != nil {
+			return fmt.Errorf("Could not determine underlying type: %s", err)
+		}
+
+		nilValue, err := c.toNilVal(b.Underlying())
+		if err != nil {
+			return fmt.Errorf("Could not determine nil value for type %s: %s", typ, err)
+		}
+
+		base := []string{fmt.Sprintf("moku::basic<%s>", typ)}
+		for _, iface := range ifaces {
+			base = append(base, iface)
+		}
+
+		fmt.Fprintf(c.output, ": %s {\n", strings.Join(base, ", "))
+		fmt.Fprintf(c.output, "%s() : moku::basic<%s>{%s} {}\n", name, typ, nilValue)
+		return nil
+	}
+	if err = c.genIfaceForType(n, fun); err != nil {
+		return err
 	}
 
-	nilValue, err := c.toNilVal(b.Underlying())
-	if err != nil {
-		return fmt.Errorf("Could not determine nil value for type %s: %s", typ, err)
-	}
-
-	fmt.Fprintf(c.output, "struct %s : moku::basic{%s} {\n", name, typ)
-	fmt.Fprintf(c.output, "%s() : moku::basic<%s>(%s) {}\n", name, typ, nilValue)
 	fmt.Fprintf(c.output, "};\n")
 
 	return nil
@@ -500,7 +528,7 @@ func (c *Compiler) genNamedType(name string, n *types.Named) (err error) {
 		return c.genStruct(name, t, n)
 
 	case *types.Basic:
-		return c.genBasicType(name, t)
+		return c.genBasicType(name, t, n)
 	}
 }
 
