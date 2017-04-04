@@ -849,6 +849,7 @@ func (c *Compiler) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
 		fmt.Fprint(gen.out, ")")
 	}
 
+	var tupleOk bool
 	switch a.Tok {
 	case token.ADD_ASSIGN:
 		fmt.Fprint(gen.out, " += ")
@@ -872,21 +873,47 @@ func (c *Compiler) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
 		fmt.Fprint(gen.out, " >>= ")
 	case token.AND_NOT_ASSIGN:
 		fmt.Fprint(gen.out, " &= ~(")
+		defer fmt.Fprint(gen.out, ")")
 	case token.ASSIGN, token.DEFINE:
 		fmt.Fprint(gen.out, " = ")
+		tupleOk = true
 	default:
 		return fmt.Errorf("Unknown assignment token")
 	}
 
+	if len(a.Rhs) == 1 {
+		return c.walk(gen, a.Rhs[0])
+	}
+
+	if !tupleOk {
+		return fmt.Errorf("Rhs incompatible with Lhs")
+	}
+
+	var types []string
 	for _, e := range a.Rhs {
+		typ, ok := c.inf.Types[e]
+		if !ok {
+			return fmt.Errorf("Couldn't determine type of expression")
+		}
+
+		ctyp, err := c.toTypeSig(typ.Type)
+		if err != nil {
+			return fmt.Errorf("Couldn't get type signature: %s", err)
+		}
+
+		types = append(types, ctyp)
+	}
+
+	fmt.Fprintf(gen.out, "std::tuple<%s>(", strings.Join(types, ", "))
+	for i, e := range a.Rhs {
 		if err = c.walk(gen, e); err != nil {
 			return err
 		}
+		if i < len(a.Rhs)-1 {
+			fmt.Fprint(gen.out, ", ")
+		}
 	}
-
-	if a.Tok == token.AND_NOT_ASSIGN {
-		fmt.Fprint(gen.out, ")")
-	}
+	fmt.Fprint(gen.out, ")")
 
 	return nil
 }
