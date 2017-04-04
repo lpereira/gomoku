@@ -9,14 +9,14 @@ more complicated due to the different expectations from platforms
 supported by gc: devices with severe memory restrictions and without
 virtual memory.
 
-The bulk of the compiler has been written in a day (April 1st, 2017),
+The bulk of the compiler has been written in a day (April 1st, 2017). 
 The lexer, parser, and type system are part of the standard library
 already, so it was just the matter of tying everything together.
 
-The generated code still doesn't compile: only the input program itself
-is generated.  All the type information and constants from imported
-packages is also generated, but no functions or methods from those are
-actually generated.
+As one would expect from such a young project, it still doesn't fully
+work.  The generated code still doesn't compile: only the input program
+itself is generated, plus type information and constants from imported
+packages.  (No method from packages are generated yet.)
 
 No automated testing is performed.  Any help to move this forward is
 greatly appreciated.
