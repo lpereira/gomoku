@@ -471,8 +471,6 @@ func (c *Compiler) genStruct(name string, s *types.Struct, n *types.Named) (err 
 }
 
 func (c *Compiler) genBasicType(name string, b *types.Basic) (err error) {
-	fmt.Fprintf(c.output, "struct %s {\n", name)
-
 	typ, err := c.toTypeSig(b.Underlying())
 	if err != nil {
 		return fmt.Errorf("Could not determine underlying type: %s", err)
@@ -483,10 +481,8 @@ func (c *Compiler) genBasicType(name string, b *types.Basic) (err error) {
 		return fmt.Errorf("Could not determine nil value for type %s: %s", typ, err)
 	}
 
-	fmt.Fprintf(c.output, "%s Value{%s};\n", typ, nilValue)
-	fmt.Fprintf(c.output, "%s() { return Value; }\n", typ)
-	fmt.Fprintf(c.output, "%s(%s v) : Value{v} {}\n", name, typ)
-	fmt.Fprintf(c.output, "%s operator=(%s v) { return Value = v; }\n", typ, typ)
+	fmt.Fprintf(c.output, "struct %s : moku::basic{%s} {\n", name, typ)
+	fmt.Fprintf(c.output, "%s() : moku::basic<%s>(%s) {}\n", name, typ, nilValue)
 	fmt.Fprintf(c.output, "};\n")
 
 	return nil
