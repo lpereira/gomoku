@@ -1265,10 +1265,54 @@ func (c *Compiler) genDeferStmt(gen *nodeGen, d *ast.DeferStmt) (err error) {
 	return nil
 }
 
+func (c *Compiler) genSliceExpr(gen *nodeGen, s *ast.SliceExpr) (err error) {
+	typ, ok := c.inf.Types[s.X]
+	if !ok {
+		return fmt.Errorf("Couldn't determine type of expression")
+	}
+	ctyp, err := c.toTypeSig(typ.Type)
+	if err != nil {
+		return fmt.Errorf("Couldn't get type signature: %s", err)
+	}
+	fmt.Fprintf(gen.out, "moku::slice_expr<%s>(", ctyp)
+
+	if err = c.walk(gen, s.X); err != nil {
+		return err
+	}
+
+	if s.Low != nil {
+		fmt.Fprintf(gen.out, ", ")
+		if err = c.walk(gen, s.Low); err != nil {
+			return err
+		}
+	}
+
+	if s.High != nil {
+		fmt.Fprintf(gen.out, ", ")
+		if err = c.walk(gen, s.High); err != nil {
+			return err
+		}
+	}
+
+	if s.Max != nil {
+		fmt.Fprintf(gen.out, ", ")
+		if err = c.walk(gen, s.Max); err != nil {
+			return err
+		}
+	}
+
+	fmt.Fprintf(gen.out, ")")
+
+	return nil
+}
+
 func (c *Compiler) walk(gen *nodeGen, node ast.Node) error {
 	switch n := node.(type) {
 	default:
 		return fmt.Errorf("Unknown node type: %s\n", reflect.TypeOf(n))
+
+	case *ast.SliceExpr:
+		return c.genSliceExpr(gen, n)
 
 	case *ast.DeferStmt:
 		return c.genDeferStmt(gen, n)
