@@ -446,8 +446,9 @@ func (c *Compiler) genIfaceForType(n *types.Named, out func(ifaces []string) err
 
 func (c *Compiler) genStruct(name string, s *types.Struct, n *types.Named) (err error) {
 	fmt.Fprintf(c.output, "struct %s", name)
+	defer fmt.Fprintf(c.output, "};\n")
 
-	fun := func(ifaces []string) error {
+	return c.genIfaceForType(n, func(ifaces []string) error {
 		if ifaces != nil {
 			fmt.Fprintf(c.output, " : %s", strings.Join(ifaces, ", "))
 		}
@@ -475,19 +476,14 @@ func (c *Compiler) genStruct(name string, s *types.Struct, n *types.Named) (err 
 			fmt.Fprintf(c.output, "%s %s;\n", typ, f.Name())
 		}
 		return nil
-	}
-	if err = c.genIfaceForType(n, fun); err != nil {
-		return err
-	}
-
-	fmt.Fprintf(c.output, "};\n")
-
-	return nil
+	})
 }
 
 func (c *Compiler) genBasicType(name string, b *types.Basic, n *types.Named) (err error) {
 	fmt.Fprintf(c.output, "struct %s", name)
-	fun := func(ifaces []string) error {
+	defer fmt.Fprintf(c.output, "};\n")
+
+	return c.genIfaceForType(n, func(ifaces []string) error {
 		typ, err := c.toTypeSig(b.Underlying())
 		if err != nil {
 			return fmt.Errorf("Could not determine underlying type: %s", err)
@@ -505,15 +501,9 @@ func (c *Compiler) genBasicType(name string, b *types.Basic, n *types.Named) (er
 
 		fmt.Fprintf(c.output, ": %s {\n", strings.Join(base, ", "))
 		fmt.Fprintf(c.output, "%s() : moku::basic<%s>{%s} {}\n", name, typ, nilValue)
+
 		return nil
-	}
-	if err = c.genIfaceForType(n, fun); err != nil {
-		return err
-	}
-
-	fmt.Fprintf(c.output, "};\n")
-
-	return nil
+	})
 }
 
 func (c *Compiler) genNamedType(name string, n *types.Named) (err error) {
