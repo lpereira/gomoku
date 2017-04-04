@@ -1037,7 +1037,8 @@ func (c *Compiler) genBinaryExpr(b *ast.BinaryExpr) (err error) {
 	return c.walk(b.Y)
 }
 
-func (c *Compiler) genDeclStmt(d *ast.DeclStmt) error {
+func (c *Compiler) genField(f *ast.Field) error {
+	fmt.Fprintf(c.output, "// field %+v\n", f)
 	return nil
 }
 
@@ -1237,9 +1238,6 @@ func (c *Compiler) walk(node ast.Node) error {
 	case *ast.BinaryExpr:
 		return c.genBinaryExpr(n)
 
-	case *ast.DeclStmt:
-		return c.genDeclStmt(n)
-
 	case *ast.Field:
 		return c.genField(n)
 
@@ -1255,7 +1253,7 @@ func (c *Compiler) walk(node ast.Node) error {
 	case *ast.BranchStmt:
 		return c.genBranchStmt(n)
 
-	case *ast.GenDecl:
+	case *ast.GenDecl, *ast.DeclStmt:
 		return nil
 	}
 }
