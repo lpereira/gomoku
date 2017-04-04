@@ -493,23 +493,18 @@ func (c *Compiler) genBasicType(name string, b *types.Basic) (err error) {
 
 func (c *Compiler) genNamedType(name string, n *types.Named) (err error) {
 	switch t := n.Underlying().(type) {
-	case *types.Interface:
-		if err = c.genInterface(name, t); err != nil {
-			return err
-		}
-	case *types.Struct:
-		if err = c.genStruct(name, t, n); err != nil {
-			return err
-		}
-	case *types.Basic:
-		if err = c.genBasicType(name, t); err != nil {
-			return err
-		}
 	default:
 		return fmt.Errorf("What to do with the named type %v?", reflect.TypeOf(t))
-	}
 
-	return nil
+	case *types.Interface:
+		return c.genInterface(name, t)
+
+	case *types.Struct:
+		return c.genStruct(name, t, n)
+
+	case *types.Basic:
+		return c.genBasicType(name, t)
+	}
 }
 
 func (c *Compiler) genPrototype(name string, sig *types.Signature) error {
