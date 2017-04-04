@@ -946,25 +946,31 @@ func (c *Compiler) genCallExpr(gen *nodeGen, call *ast.CallExpr) (err error) {
 	return nil
 }
 
-func (c *Compiler) genSelectorExpr(gen *nodeGen, s *ast.SelectorExpr) error {
+func (c *Compiler) genSelectorExpr(gen *nodeGen, s *ast.SelectorExpr) (err error) {
 	var obj types.Object
 	obj, ok := c.inf.Uses[s.Sel]
 	if !ok {
 		return fmt.Errorf("Sel not found for X: %s", s)
 	}
 
-	ident := s.X.(*ast.Ident)
-	if pkg := obj.Pkg(); pkg != nil && pkg.Name() == ident.Name {
-		fmt.Fprintf(gen.out, "%s::%s", pkg.Name(), s.Sel.Name)
-		return nil
+	switch t := s.X.(type) {
+	case *ast.SelectorExpr:
+		if err = c.genSelectorExpr(gen, t); err != nil {
+			return err
+		}
+		fmt.Fprintf(gen.out, ".%s", s.Sel.Name)
+	case *ast.Ident:
+		if pkg := obj.Pkg(); pkg != nil && pkg.Name() == t.Name {
+			fmt.Fprintf(gen.out, "%s::%s", pkg.Name(), s.Sel.Name)
+			return nil
+		}
+		if this := c.recvs.Lookup(t.Name); this != nil {
+			fmt.Fprintf(gen.out, "this->%s", s.Sel.Name)
+			return nil
+		}
+		fmt.Fprintf(gen.out, "%s.%s", t.Name, s.Sel.Name)
 	}
 
-	if this := c.recvs.Lookup(ident.Name); this != nil {
-		fmt.Fprintf(gen.out, "this->%s", s.Sel.Name)
-		return nil
-	}
-
-	fmt.Fprintf(gen.out, "%s.%s", ident.Name, s.Sel.Name)
 	return nil
 }
 
