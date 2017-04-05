@@ -129,6 +129,29 @@ void f(int x) {
 }
 ```
 
+## gcd
+
+### Go
+
+```Go
+func gcd(x, y int) int {
+	for y != 0 {
+		x, y = y, x%y
+	}
+	return x
+}
+```
+
+### C++
+```C++
+int gcd(int x, int y) {
+  for (; y != 0;) {
+    std::tie(x, y) = std::tuple<int, int>(y, x % y);
+  }
+  return x;
+}
+```
+
 # Usage
 
 The program is parsed from the standard input and written to the standard
