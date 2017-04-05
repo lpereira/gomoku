@@ -1409,8 +1409,7 @@ func (c *Compiler) genUnaryExpr(u *ast.UnaryExpr) (s string, err error) {
 func (c *Compiler) genFuncLit(gen *nodeGen, f *ast.FuncLit) (err error) {
 	if typ, ok := c.inf.Types[f]; ok {
 		out := func(_, retType, params string) {
-			// TODO: capture-list with proper semantics
-			fmt.Fprintf(gen.out, "[](%s) -> %s", params, retType)
+			fmt.Fprintf(gen.out, "[=](%s) mutable -> %s", params, retType)
 		}
 		if err = c.genFuncProto("", typ.Type.(*types.Signature), out); err != nil {
 			return err
