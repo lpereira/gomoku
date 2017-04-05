@@ -1417,10 +1417,29 @@ func (c *Compiler) genUnaryExpr(gen *nodeGen, u *ast.UnaryExpr) (err error) {
 	return err
 }
 
+func (c *Compiler) genFuncLit(gen *nodeGen, f *ast.FuncLit) (err error) {
+	if typ, ok := c.inf.Types[f]; ok {
+		out := func(_, retType, params string) {
+			fmt.Fprintf(gen.out, "[](%s) -> %s", params, retType)
+		}
+		if err = c.genFuncProto("", typ.Type.(*types.Signature), out); err != nil {
+			return err
+		}
+		fmt.Fprintf(gen.out, "{")
+		defer fmt.Fprintf(gen.out, "}")
+		return c.genBlockStmt(gen, f.Body)
+	}
+
+	return fmt.Errorf("Couldn't find function literal scope")
+}
+
 func (c *Compiler) walk(gen *nodeGen, node ast.Node) error {
 	switch n := node.(type) {
 	default:
 		return fmt.Errorf("Unknown node type: %s\n", reflect.TypeOf(n))
+
+	case *ast.FuncLit:
+		return c.genFuncLit(gen, n)
 
 	case *ast.UnaryExpr:
 		return c.genUnaryExpr(gen, n)

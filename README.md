@@ -157,7 +157,7 @@ are way more challenging than others:
 - [ ] Get pointer vs. value semantics as correct as possible
 - [ ] Implement type conversion
 - [ ] Implement basic Go data types (arrays, slices, and maps)
-- [ ] Closures / anonymous functions
+- [x] Closures / anonymous functions
 - [x] Deferred statements
 - [x] Range-based loops
 - [ ] Switch statement
