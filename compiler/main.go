@@ -657,63 +657,101 @@ func (c *Compiler) genImports() (err error) {
 	return nil
 }
 
+func (c *Compiler) genMapType(m *ast.MapType) (string, error) {
+	k, err := c.genExpr(m.Key)
+	if err != nil {
+		return "", err
+	}
+	v, err := c.genExpr(m.Value)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("std::map<%s, %s>", k, v), nil
+}
+
+func (c *Compiler) genCallExpr(ce *ast.CallExpr) (string, error) {
+	fun, err := c.genExpr(ce.Fun)
+	if err != nil {
+		return "", err
+	}
+
+	var args []string
+	for _, arg := range ce.Args {
+		argExp, err := c.genExpr(arg)
+		if err != nil {
+			return "", err
+		}
+
+		args = append(args, argExp)
+	}
+	if ce.Ellipsis.IsValid() {
+		// TODO
+	}
+
+	return fmt.Sprintf("%s(%s)", fun, strings.Join(args, ", ")), nil
+}
+
+func (c *Compiler) genBasicLit(b *ast.BasicLit) (string, error) {
+	switch b.Kind {
+	default:
+		return "", fmt.Errorf("Unknown basic literal type: %+v", b)
+
+	case token.INT, token.FLOAT, token.CHAR, token.STRING:
+		return b.Value, nil
+
+	case token.IMAG:
+		return "", fmt.Errorf("Imaginary numbers not supported")
+	}
+}
+
+func (c *Compiler) genIdent(i *ast.Ident) (string, error) {
+	if this := c.recvs.Lookup(i.Name); this != nil {
+		return "this", nil
+	}
+	if basicTyp, ok := goTypeToBasic[i.Name]; ok {
+		return basicTypeToCpp[basicTyp].typ, nil
+	}
+	return i.Name, nil
+}
+
 func (c *Compiler) genExpr(x ast.Expr) (string, error) {
 	switch x := x.(type) {
 	default:
 		return "", fmt.Errorf("Couldn't generate expression with type: %s", reflect.TypeOf(x))
 
-	case *ast.MapType:
-		k, err := c.genExpr(x.Key)
-		if err != nil {
-			return "", err
-		}
-		v, err := c.genExpr(x.Value)
-		if err != nil {
-			return "", err
-		}
-
-		return fmt.Sprintf("std::map<%s, %s>", k, v), nil
+	case *ast.BinaryExpr:
+		return c.genBinaryExpr(x)
 
 	case *ast.CallExpr:
-		fun, err := c.genExpr(x.Fun)
-		if err != nil {
-			return "", err
-		}
-
-		var args []string
-		for _, arg := range x.Args {
-			argExp, err := c.genExpr(arg)
-			if err != nil {
-				return "", err
-			}
-
-			args = append(args, argExp)
-		}
-		if x.Ellipsis.IsValid() {
-			// TODO
-		}
-
-		return fmt.Sprintf("%s(%s)", fun, strings.Join(args, ", ")), nil
+		return c.genCallExpr(x)
 
 	case *ast.SelectorExpr:
-		var obj types.Object
-		obj, ok := c.inf.Uses[x.Sel]
-		if !ok {
-			return "", fmt.Errorf("Sel not found for X: %s", x)
-		}
+		return c.genSelectorExpr(x)
 
-		if pkg := obj.Pkg(); pkg != nil {
-			return fmt.Sprintf("%s::%s", pkg.Name(), x.Sel.Name), nil
-		}
+	case *ast.ParenExpr:
+		return c.genParenExpr(x)
 
-		return "", fmt.Errorf("Universe/label")
+	case *ast.SliceExpr:
+		return c.genSliceExpr(x)
+
+	case *ast.IndexExpr:
+		return c.genIndexExpr(x)
+
+	case *ast.UnaryExpr:
+		return c.genUnaryExpr(x)
+
+	case *ast.ArrayType:
+		return c.genArrayType(x)
+
+	case *ast.MapType:
+		return c.genMapType(x)
 
 	case *ast.BasicLit:
-		// TODO might need some conversion
-		return x.Value, nil
+		return c.genBasicLit(x)
 
 	case *ast.Ident:
-		return x.Name, nil
+		return c.genIdent(x)
 	}
 }
 
@@ -916,83 +954,33 @@ func (c *Compiler) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
 	return nil
 }
 
-func (c *Compiler) genIdent(gen *nodeGen, i *ast.Ident) error {
-	if this := c.recvs.Lookup(i.Name); this != nil {
-		fmt.Fprint(gen.out, "this")
-	} else {
-		fmt.Fprint(gen.out, i.Name)
-	}
-	return nil
-}
-
-func (c *Compiler) genCallExpr(gen *nodeGen, call *ast.CallExpr) (err error) {
-	var cppTyp bool
-	if ident, ok := call.Fun.(*ast.Ident); ok {
-		if bk, ok := goTypeToBasic[ident.Name]; ok {
-			fmt.Fprint(gen.out, basicTypeToCpp[bk].typ)
-			cppTyp = true
-		}
-	}
-
-	if !cppTyp {
-		if err = c.walk(gen, call.Fun); err != nil {
-			return err
-		}
-	}
-
-	fmt.Fprintf(gen.out, "(")
-	for i, arg := range call.Args {
-		if err = c.walk(gen, arg); err != nil {
-			return err
-		}
-		if i != len(call.Args)-1 {
-			fmt.Fprintf(gen.out, ", ")
-		}
-	}
-	fmt.Fprintf(gen.out, ")")
-
-	return nil
-}
-
-func (c *Compiler) genSelectorExpr(gen *nodeGen, s *ast.SelectorExpr) (err error) {
+func (c *Compiler) genSelectorExpr(s *ast.SelectorExpr) (string, error) {
 	var obj types.Object
 	obj, ok := c.inf.Uses[s.Sel]
 	if !ok {
-		return fmt.Errorf("Sel not found for X: %s", s)
+		return "", fmt.Errorf("Sel not found for X: %s", s)
 	}
 
 	switch t := s.X.(type) {
+	default:
+		return "", fmt.Errorf("Unknown type for left-side of selector: %s", reflect.TypeOf(t))
+
 	case *ast.SelectorExpr:
-		if err = c.genSelectorExpr(gen, t); err != nil {
-			return err
+		lhs, err := c.genSelectorExpr(s)
+		if err != nil {
+			return "", err
 		}
-		fmt.Fprintf(gen.out, ".%s", s.Sel.Name)
+
+		return fmt.Sprintf("%s.%s", lhs, s.Sel.Name), nil
+
 	case *ast.Ident:
 		if pkg := obj.Pkg(); pkg != nil && pkg.Name() == t.Name {
-			fmt.Fprintf(gen.out, "%s::%s", pkg.Name(), s.Sel.Name)
-			return nil
+			return fmt.Sprintf("%s::%s", pkg.Name(), s.Sel.Name), nil
 		}
 		if this := c.recvs.Lookup(t.Name); this != nil {
-			fmt.Fprintf(gen.out, "this->%s", s.Sel.Name)
-			return nil
+			return fmt.Sprintf("this->%s", s.Sel.Name), nil
 		}
-		fmt.Fprintf(gen.out, "%s.%s", t.Name, s.Sel.Name)
-	}
-
-	return nil
-}
-
-func (c *Compiler) genBasicLit(gen *nodeGen, b *ast.BasicLit) error {
-	switch b.Kind {
-	default:
-		return fmt.Errorf("Unknown basic literal type: %+v", b)
-
-	case token.INT, token.FLOAT, token.CHAR, token.STRING:
-		fmt.Fprintf(gen.out, "%s", b.Value)
-		return nil
-
-	case token.IMAG:
-		return fmt.Errorf("Imaginary numbers not supported")
+		return fmt.Sprintf("%s.%s", t.Name, s.Sel.Name), nil
 	}
 }
 
@@ -1106,12 +1094,16 @@ func (c *Compiler) genExprStmt(gen *nodeGen, e *ast.ExprStmt) error {
 	return c.walk(gen, e.X)
 }
 
-func (c *Compiler) genBinaryExpr(gen *nodeGen, b *ast.BinaryExpr) (err error) {
-	if err = c.walk(gen, b.X); err != nil {
-		return err
+func (c *Compiler) genBinaryExpr(b *ast.BinaryExpr) (s string, err error) {
+	x, err := c.genExpr(b.X)
+	if err != nil {
+		return "", err
 	}
-	fmt.Fprintf(gen.out, " %s ", b.Op)
-	return c.walk(gen, b.Y)
+	y, err := c.genExpr(b.Y)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s %s %s", x, b.Op, y), nil
 }
 
 func (c *Compiler) genField(gen *nodeGen, f *ast.Field) error {
@@ -1161,13 +1153,11 @@ func (c *Compiler) genCompositeLit(gen *nodeGen, cl *ast.CompositeLit) (err erro
 	return nil
 }
 
-func (c *Compiler) genParenExpr(gen *nodeGen, p *ast.ParenExpr) (err error) {
-	fmt.Fprint(gen.out, "(")
-	if err = c.walk(gen, p.X); err != nil {
-		return err
+func (c *Compiler) genParenExpr(p *ast.ParenExpr) (s string, err error) {
+	if expr, err := c.genExpr(p.X); err == nil {
+		return fmt.Sprintf("(%s)", expr), nil
 	}
-	fmt.Fprint(gen.out, ")")
-	return nil
+	return "", err
 }
 
 func (c *Compiler) genIncDecStmt(gen *nodeGen, p *ast.IncDecStmt) (err error) {
@@ -1232,32 +1222,24 @@ func (c *Compiler) genBranchStmt(gen *nodeGen, b *ast.BranchStmt) (err error) {
 	return nil
 }
 
-func (c *Compiler) genArrayType(gen *nodeGen, a *ast.ArrayType) (err error) {
+func (c *Compiler) genArrayType(a *ast.ArrayType) (s string, err error) {
+	typ, err := c.genExpr(a.Elt)
+	if err != nil {
+		return "", err
+	}
+
 	if a.Len == nil {
-		fmt.Fprintf(gen.out, "moku::slice<")
-	} else {
-		fmt.Fprintf(gen.out, "std::vector<")
+		return fmt.Sprintf("moku::slice<%s>", typ), nil
 	}
 
-	// FIXME underlying type
-	if err = c.walk(gen, a.Elt); err != nil {
-		return err
-	}
-
-	fmt.Fprintf(gen.out, ">")
-	return nil
+	return fmt.Sprintf("std::vector<%s>", typ), nil
 }
 
-func (c *Compiler) genIndexExpr(gen *nodeGen, i *ast.IndexExpr) (err error) {
-	if err = c.walk(gen, i.X); err != nil {
-		return err
+func (c *Compiler) genIndexExpr(i *ast.IndexExpr) (s string, err error) {
+	if expr, err := c.genExpr(i.X); err == nil {
+		return fmt.Sprintf("[%s]", expr), nil
 	}
-	fmt.Fprintf(c.output, "[")
-	if err = c.walk(gen, i.Index); err != nil {
-		return err
-	}
-	fmt.Fprintf(gen.out, "]")
-	return nil
+	return "", err
 }
 
 func (c *Compiler) genDeferStmt(gen *nodeGen, d *ast.DeferStmt) (err error) {
@@ -1274,45 +1256,49 @@ func (c *Compiler) genDeferStmt(gen *nodeGen, d *ast.DeferStmt) (err error) {
 	return nil
 }
 
-func (c *Compiler) genSliceExpr(gen *nodeGen, s *ast.SliceExpr) (err error) {
-	typ, ok := c.inf.Types[s.X]
-	if !ok {
-		return fmt.Errorf("Couldn't determine type of expression")
-	}
-	ctyp, err := c.toTypeSig(typ.Type)
-	if err != nil {
-		return fmt.Errorf("Couldn't get type signature: %s", err)
-	}
-	fmt.Fprintf(gen.out, "moku::slice_expr<%s>(", ctyp)
+func (c *Compiler) genSliceExpr(s *ast.SliceExpr) (str string, err error) {
+	var args []string
 
-	if err = c.walk(gen, s.X); err != nil {
-		return err
+	arg, err := c.genExpr(s.X)
+	if err != nil {
+		return "", err
 	}
+	args = append(args, arg)
 
 	if s.Low != nil {
-		fmt.Fprintf(gen.out, ", ")
-		if err = c.walk(gen, s.Low); err != nil {
-			return err
+		arg, err := c.genExpr(s.Low)
+		if err != nil {
+			return "", err
 		}
+		args = append(args, arg)
 	}
 
 	if s.High != nil {
-		fmt.Fprintf(gen.out, ", ")
-		if err = c.walk(gen, s.High); err != nil {
-			return err
+		arg, err := c.genExpr(s.High)
+		if err != nil {
+			return "", err
 		}
+		args = append(args, arg)
 	}
 
 	if s.Max != nil {
-		fmt.Fprintf(gen.out, ", ")
-		if err = c.walk(gen, s.Max); err != nil {
-			return err
+		arg, err := c.genExpr(s.Max)
+		if err != nil {
+			return "", err
 		}
+		args = append(args, arg)
 	}
 
-	fmt.Fprintf(gen.out, ")")
+	typ, ok := c.inf.Types[s.X]
+	if !ok {
+		return "", fmt.Errorf("Couldn't determine type of expression")
+	}
+	ctyp, err := c.toTypeSig(typ.Type)
+	if err != nil {
+		return "", fmt.Errorf("Couldn't get type signature: %s", err)
+	}
 
-	return nil
+	return fmt.Sprintf("moku::slice_expr<%s>(%s)", ctyp, strings.Join(args, ", ")), nil
 }
 
 func (c *Compiler) genIfStmt(gen *nodeGen, i *ast.IfStmt) (err error) {
@@ -1410,11 +1396,11 @@ func (c *Compiler) genRangeStmt(gen *nodeGen, r *ast.RangeStmt) (err error) {
 	return nil
 }
 
-func (c *Compiler) genUnaryExpr(gen *nodeGen, u *ast.UnaryExpr) (err error) {
+func (c *Compiler) genUnaryExpr(u *ast.UnaryExpr) (s string, err error) {
 	if expr, err := c.genExpr(u.X); err == nil {
-		fmt.Fprint(gen.out, "%s%s", u.Op, expr)
+		return fmt.Sprintf("%s%s", u.Op, expr), nil
 	}
-	return err
+	return "", err
 }
 
 func (c *Compiler) genFuncLit(gen *nodeGen, f *ast.FuncLit) (err error) {
@@ -1436,13 +1422,20 @@ func (c *Compiler) genFuncLit(gen *nodeGen, f *ast.FuncLit) (err error) {
 func (c *Compiler) walk(gen *nodeGen, node ast.Node) error {
 	switch n := node.(type) {
 	default:
+		if expr, ok := n.(ast.Expr); ok {
+			out, err := c.genExpr(expr)
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprint(gen.out, out)
+			return nil
+		}
+
 		return fmt.Errorf("Unknown node type: %s\n", reflect.TypeOf(n))
 
 	case *ast.FuncLit:
 		return c.genFuncLit(gen, n)
-
-	case *ast.UnaryExpr:
-		return c.genUnaryExpr(gen, n)
 
 	case *ast.RangeStmt:
 		return c.genRangeStmt(gen, n)
@@ -1450,23 +1443,11 @@ func (c *Compiler) walk(gen *nodeGen, node ast.Node) error {
 	case *ast.IfStmt:
 		return c.genIfStmt(gen, n)
 
-	case *ast.SliceExpr:
-		return c.genSliceExpr(gen, n)
-
 	case *ast.DeferStmt:
 		return c.genDeferStmt(gen, n)
 
-	case *ast.IndexExpr:
-		return c.genIndexExpr(gen, n)
-
-	case *ast.ArrayType:
-		return c.genArrayType(gen, n)
-
 	case *ast.IncDecStmt:
 		return c.genIncDecStmt(gen, n)
-
-	case *ast.ParenExpr:
-		return c.genParenExpr(gen, n)
 
 	case *ast.Comment:
 		return c.genComment(gen, n)
@@ -1480,26 +1461,11 @@ func (c *Compiler) walk(gen *nodeGen, node ast.Node) error {
 	case *ast.AssignStmt:
 		return c.genAssignStmt(gen, n)
 
-	case *ast.Ident:
-		return c.genIdent(gen, n)
-
-	case *ast.CallExpr:
-		return c.genCallExpr(gen, n)
-
-	case *ast.SelectorExpr:
-		return c.genSelectorExpr(gen, n)
-
-	case *ast.BasicLit:
-		return c.genBasicLit(gen, n)
-
 	case *ast.ForStmt:
 		return c.genForStmt(gen, n)
 
 	case *ast.ExprStmt:
 		return c.genExprStmt(gen, n)
-
-	case *ast.BinaryExpr:
-		return c.genBinaryExpr(gen, n)
 
 	case *ast.Field:
 		return c.genField(gen, n)
