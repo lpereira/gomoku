@@ -159,7 +159,7 @@ are way more challenging than others:
 - [ ] Implement basic Go data types (arrays, slices, and maps)
 - [ ] Closures / anonymous functions
 - [x] Deferred statements
-- [ ] Range-based loops
+- [x] Range-based loops
 - [ ] Switch statement
 - [ ] Write a basic standard library for embedded devices
 - [ ] Memory management with garbage collection

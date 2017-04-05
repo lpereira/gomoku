@@ -30,6 +30,8 @@ type Compiler struct {
 	output io.Writer
 
 	recvs VarStack
+
+	idents int
 }
 
 type VarStack struct {
@@ -144,6 +146,12 @@ func init() {
 		"float64": types.Float64,
 		"string":  types.String,
 	}
+}
+
+func (c *Compiler) newIdent() (ret string) {
+	ret = fmt.Sprintf("_ident_%d_", c.idents)
+	c.idents++
+	return
 }
 
 func (c *Compiler) toTypeSig(t types.Type) (string, error) {
@@ -1048,7 +1056,7 @@ func (c *Compiler) genBlockStmt(gen *nodeGen, blk *ast.BlockStmt) (err error) {
 		default:
 			fmt.Fprintln(gen.out, ";")
 
-		case *ast.ForStmt, *ast.DeclStmt, *ast.IfStmt:
+		case *ast.ForStmt, *ast.DeclStmt, *ast.IfStmt, *ast.RangeStmt:
 		}
 	}
 	return nil
@@ -1338,6 +1346,70 @@ func (c *Compiler) genIfStmt(gen *nodeGen, i *ast.IfStmt) (err error) {
 	return nil
 }
 
+func (c *Compiler) genRangeStmt(gen *nodeGen, r *ast.RangeStmt) (err error) {
+	getRangeFunc := func() (string, string) {
+		var keyIdent, valIdent string
+
+		switch k := r.Key.(type) {
+		case *ast.Ident:
+			keyIdent = k.Name
+		default:
+			keyIdent = "_"
+		}
+		switch v := r.Value.(type) {
+		case *ast.Ident:
+			valIdent = v.Name
+		default:
+			valIdent = "_"
+		}
+
+		switch {
+		case keyIdent == "_" && valIdent == "_":
+			return fmt.Sprintf("auto %s", c.newIdent()), "moku::range_void"
+		case keyIdent == "_":
+			return valIdent, "moku::range_value"
+		case valIdent == "_":
+			return keyIdent, "moku::range_key"
+		default:
+			return fmt.Sprintf("std::tie(%s, %s)", keyIdent, valIdent), "moku::range_key_value"
+		}
+	}
+
+	typ, ok := c.inf.Types[r.X]
+	if !ok {
+		return fmt.Errorf("Couldn't determine type of range expression")
+	}
+	ctyp, err := c.toTypeSig(typ.Type)
+	if err != nil {
+		return fmt.Errorf("Couldn't get type signature: %s", err)
+	}
+	rangeExp, err := c.genExpr(r.X)
+	if err != nil {
+		return fmt.Errorf("Couldn't convert expression to string: %s", err)
+	}
+
+	if r.Tok == token.DEFINE {
+		fmt.Fprintf(gen.out, "{")
+		defer fmt.Fprintf(gen.out, "}")
+
+		filt := func(n string) bool { return true }
+		if err = c.genScopeVars(gen, r, filt); err != nil {
+			return err
+		}
+	}
+
+	lhs, rangeFunc := getRangeFunc()
+	fmt.Fprintf(gen.out, "for (%s : %s<%s>(%s)) {", lhs, rangeFunc, ctyp, rangeExp)
+
+	if err = c.genBlockStmt(gen, r.Body); err != nil {
+		return fmt.Errorf("Couldn't create range for body: %s", err)
+	}
+
+	fmt.Fprintf(gen.out, "}\n")
+
+	return nil
+}
+
 func (c *Compiler) genUnaryExpr(gen *nodeGen, u *ast.UnaryExpr) (err error) {
 	if expr, err := c.genExpr(u.X); err == nil {
 		fmt.Fprint(gen.out, "%s%s", u.Op, expr)
@@ -1352,6 +1424,9 @@ func (c *Compiler) walk(gen *nodeGen, node ast.Node) error {
 
 	case *ast.UnaryExpr:
 		return c.genUnaryExpr(gen, n)
+
+	case *ast.RangeStmt:
+		return c.genRangeStmt(gen, n)
 
 	case *ast.IfStmt:
 		return c.genIfStmt(gen, n)
