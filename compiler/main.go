@@ -720,6 +720,9 @@ func (c *Compiler) genExpr(x ast.Expr) (string, error) {
 	default:
 		return "", fmt.Errorf("Couldn't generate expression with type: %s", reflect.TypeOf(x))
 
+	case *ast.CompositeLit:
+		return c.genCompositeLit(x)
+
 	case *ast.BinaryExpr:
 		return c.genBinaryExpr(x)
 
@@ -1133,24 +1136,24 @@ func (c *Compiler) genReturnStmt(gen *nodeGen, r *ast.ReturnStmt) (err error) {
 	return nil
 }
 
-func (c *Compiler) genCompositeLit(gen *nodeGen, cl *ast.CompositeLit) (err error) {
+func (c *Compiler) genCompositeLit(cl *ast.CompositeLit) (str string, err error) {
+	var typ string
 	if cl.Type != nil {
-		if err = c.walk(gen, cl.Type); err != nil {
-			return err
+		if typ, err = c.genExpr(cl.Type); err != nil {
+			return "", err
 		}
 	}
 
-	fmt.Fprintf(gen.out, "{")
-	for i, elt := range cl.Elts {
-		if err = c.walk(gen, elt); err != nil {
-			return err
+	var elts []string
+	for _, e := range cl.Elts {
+		if elt, err := c.genExpr(e); err == nil {
+			elts = append(elts, elt)
+			continue
 		}
-		if i < len(cl.Elts)-1 {
-			fmt.Fprint(gen.out, ", ")
-		}
+		return "", err
 	}
-	fmt.Fprintf(gen.out, "}")
-	return nil
+
+	return fmt.Sprintf("%s{%s}", typ, strings.Join(elts, ", ")), nil
 }
 
 func (c *Compiler) genParenExpr(p *ast.ParenExpr) (s string, err error) {
@@ -1473,9 +1476,6 @@ func (c *Compiler) walk(gen *nodeGen, node ast.Node) error {
 
 	case *ast.ReturnStmt:
 		return c.genReturnStmt(gen, n)
-
-	case *ast.CompositeLit:
-		return c.genCompositeLit(gen, n)
 
 	case *ast.LabeledStmt:
 		return c.genLabeledStmt(gen, n)
