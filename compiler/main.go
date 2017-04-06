@@ -1470,6 +1470,9 @@ func (c *Compiler) walk(gen *nodeGen, node ast.Node) error {
 		fmt.Fprint(gen.out, out)
 		return nil
 
+	case *ast.BlockStmt:
+		return c.genBlockStmt(gen, n)
+
 	case *ast.RangeStmt:
 		return c.genRangeStmt(gen, n)
 
