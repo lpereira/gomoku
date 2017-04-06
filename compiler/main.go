@@ -720,6 +720,9 @@ func (c *Compiler) genExpr(x ast.Expr) (string, error) {
 	default:
 		return "", fmt.Errorf("Couldn't generate expression with type: %s", reflect.TypeOf(x))
 
+	case *ast.FuncLit:
+		return c.genFuncLit(x)
+
 	case *ast.CompositeLit:
 		return c.genCompositeLit(x)
 
@@ -1406,39 +1409,43 @@ func (c *Compiler) genUnaryExpr(u *ast.UnaryExpr) (s string, err error) {
 	return "", err
 }
 
-func (c *Compiler) genFuncLit(gen *nodeGen, f *ast.FuncLit) (err error) {
-	if typ, ok := c.inf.Types[f]; ok {
-		out := func(_, retType, params string) {
-			fmt.Fprintf(gen.out, "[=](%s) mutable -> %s", params, retType)
-		}
-		if err = c.genFuncProto("", typ.Type.(*types.Signature), out); err != nil {
-			return err
-		}
-		fmt.Fprintf(gen.out, "{")
-		defer fmt.Fprintf(gen.out, "}")
-		return c.genBlockStmt(gen, f.Body)
+func (c *Compiler) genFuncLit(f *ast.FuncLit) (str string, err error) {
+	typ, ok := c.inf.Types[f]
+	if !ok {
+		return "", fmt.Errorf("Couldn't find function literal scope")
 	}
 
-	return fmt.Errorf("Couldn't find function literal scope")
+	litGen := nodeGen{out: new(bytes.Buffer)}
+
+	out := func(_, retType, params string) {
+		fmt.Fprintf(litGen.out, "[=](%s) mutable -> %s", params, retType)
+	}
+	if err = c.genFuncProto("", typ.Type.(*types.Signature), out); err != nil {
+		return "", err
+	}
+
+	fmt.Fprint(litGen.out, "{")
+	if err = c.genBlockStmt(&litGen, f.Body); err != nil {
+		return "", err
+	}
+	fmt.Fprint(litGen.out, "}")
+
+	return litGen.out.(*bytes.Buffer).String(), nil
 }
 
 func (c *Compiler) walk(gen *nodeGen, node ast.Node) error {
 	switch n := node.(type) {
 	default:
-		if expr, ok := n.(ast.Expr); ok {
-			out, err := c.genExpr(expr)
-			if err != nil {
-				return err
-			}
-
-			fmt.Fprint(gen.out, out)
-			return nil
-		}
-
 		return fmt.Errorf("Unknown node type: %s\n", reflect.TypeOf(n))
 
-	case *ast.FuncLit:
-		return c.genFuncLit(gen, n)
+	case ast.Expr:
+		out, err := c.genExpr(n)
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprint(gen.out, out)
+		return nil
 
 	case *ast.RangeStmt:
 		return c.genRangeStmt(gen, n)
