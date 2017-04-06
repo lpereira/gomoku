@@ -1246,7 +1246,7 @@ func (c *Compiler) genIndexExpr(i *ast.IndexExpr) (s string, err error) {
 }
 
 func (c *Compiler) genDeferStmt(gen *nodeGen, d *ast.DeferStmt) (err error) {
-	fmt.Fprintf(gen.out, "_defer_.Push([]() {")
+	fmt.Fprintf(gen.out, "_defer_.Push([=]() mutable {")
 
 	if err = c.walk(gen, d.Call); err != nil {
 		return err
