@@ -324,7 +324,7 @@ func (c *Compiler) toNilVal(t types.Type) (string, error) {
 	return nilVal, err
 }
 
-func (c *Compiler) genFuncProto(name string, sig *types.Signature, out func(name, retType, params string)) (err error) {
+func (c *Compiler) genFuncProto(name string, sig *types.Signature, out func(name, retType, params string) error) (err error) {
 	sigParm := sig.Params()
 	var params []string
 	for p := 0; p < sigParm.Len(); p++ {
@@ -363,9 +363,7 @@ func (c *Compiler) genFuncProto(name string, sig *types.Signature, out func(name
 		retType = fmt.Sprintf("std::tuple<%s>", strings.Join(mult, ", "))
 	}
 
-	out(name, retType, strings.Join(params, ", "))
-
-	return nil
+	return out(name, retType, strings.Join(params, ", "))
 }
 
 func (c *Compiler) genInterface(name string, iface *types.Interface) (err error) {
@@ -375,8 +373,9 @@ func (c *Compiler) genInterface(name string, iface *types.Interface) (err error)
 		meth := iface.Method(m - 1)
 		sig := meth.Type().(*types.Signature)
 
-		err = c.genFuncProto(meth.Name(), sig, func(name, retType, params string) {
+		err = c.genFuncProto(meth.Name(), sig, func(name, retType, params string) error {
 			fmt.Fprintf(c.output, "virtual %s %s(%s) = 0;\n", retType, name, params)
+			return nil
 		})
 		if err != nil {
 			return err
@@ -436,12 +435,13 @@ func (c *Compiler) genIfaceForType(n *types.Named, out func(ifaces []string) err
 			f := sel.Obj().(*types.Func)
 			sig := f.Type().(*types.Signature)
 
-			err = c.genFuncProto(f.Name(), sig, func(name, retType, params string) {
+			err = c.genFuncProto(f.Name(), sig, func(name, retType, params string) error {
 				if _, virtual := ifaceMeths[f.Name()]; virtual {
 					fmt.Fprintf(c.output, "virtual %s %s(%s) override;\n", retType, name, params)
 				} else {
 					fmt.Fprintf(c.output, "%s %s(%s);\n", retType, name, params)
 				}
+				return nil
 			})
 			if err != nil {
 				return err
@@ -531,8 +531,9 @@ func (c *Compiler) genNamedType(name string, n *types.Named) (err error) {
 }
 
 func (c *Compiler) genPrototype(name string, sig *types.Signature) error {
-	return c.genFuncProto(name, sig, func(name, retType, params string) {
+	return c.genFuncProto(name, sig, func(name, retType, params string) error {
 		fmt.Fprintf(c.output, "%s %s(%s);\n", retType, name, params)
+		return nil
 	})
 }
 
@@ -839,12 +840,21 @@ func (c *Compiler) genFuncDecl(gen *nodeGen, f *ast.FuncDecl) (err error) {
 	fun := typ.(*types.Func)
 	sig := fun.Type().(*types.Signature)
 	recv := sig.Recv()
-	err = c.genFuncProto(name, sig, func(name, retType, params string) {
+	err = c.genFuncProto(name, sig, func(name, retType, params string) (err error) {
 		if recv != nil {
-			typ := recv.Type().(*types.Named).Obj().Name()
+			var typ string
+			switch t := recv.Type().(type) {
+			case *types.Named:
+				typ = t.Obj().Name()
+			case *types.Pointer:
+				if typ, err = c.toTypeSig(t.Elem()); err != nil {
+					return err
+				}
+			}
 			name = fmt.Sprintf("%s::%s", typ, name)
 		}
 		fmt.Fprintf(gen.out, "%s %s(%s)\n", retType, name, params)
+		return nil
 	})
 	if err != nil {
 		return err
@@ -1440,8 +1450,9 @@ func (c *Compiler) genFuncLit(f *ast.FuncLit) (str string, err error) {
 
 	litGen := nodeGen{out: new(bytes.Buffer)}
 
-	out := func(_, retType, params string) {
+	out := func(_, retType, params string) error {
 		fmt.Fprintf(litGen.out, "[=](%s) mutable -> %s", params, retType)
+		return nil
 	}
 	if err = c.genFuncProto("", typ.Type.(*types.Signature), out); err != nil {
 		return "", err
