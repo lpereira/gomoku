@@ -717,10 +717,17 @@ func (c *Compiler) genIdent(i *ast.Ident) (string, error) {
 	return i.Name, nil
 }
 
+func (c *Compiler) genStarExpr(s *ast.StarExpr) (string, error) {
+	return c.genUnaryExpr(&ast.UnaryExpr{X: s.X, Op: token.MUL})
+}
+
 func (c *Compiler) genExpr(x ast.Expr) (string, error) {
 	switch x := x.(type) {
 	default:
 		return "", fmt.Errorf("Couldn't generate expression with type: %s", reflect.TypeOf(x))
+
+	case *ast.StarExpr:
+		return c.genStarExpr(x)
 
 	case *ast.FuncLit:
 		return c.genFuncLit(x)
