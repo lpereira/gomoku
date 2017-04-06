@@ -972,6 +972,14 @@ func (c *Compiler) genSelectorExpr(s *ast.SelectorExpr) (string, error) {
 	default:
 		return "", fmt.Errorf("Unknown type for left-side of selector: %s", reflect.TypeOf(t))
 
+	case *ast.CallExpr:
+		lhs, err := c.genCallExpr(t)
+		if err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf("%s.%s", lhs, s.Sel.Name), nil
+
 	case *ast.SelectorExpr:
 		lhs, err := c.genSelectorExpr(s)
 		if err != nil {
