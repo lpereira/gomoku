@@ -559,7 +559,7 @@ func (c *Compiler) genVar(gen *nodeGen, v *types.Var, mainBlock bool) error {
 	return nil
 }
 
-func (c *Compiler) genConst(k *types.Const, mainBlock bool) error {
+func (c *Compiler) genConst(gen *nodeGen, k *types.Const, mainBlock bool) error {
 	typ, err := c.toTypeSig(k.Type())
 	if err != nil {
 		return fmt.Errorf("Couldn't get type signature for variable: %s", err)
@@ -567,11 +567,11 @@ func (c *Compiler) genConst(k *types.Const, mainBlock bool) error {
 
 	if mainBlock {
 		if !k.Exported() {
-			fmt.Fprint(c.output, "static ")
+			fmt.Fprint(gen.out, "static ")
 		}
-		fmt.Fprintf(c.output, "constexpr %s %s{%s};\n", typ, k.Name(), k.Val())
+		fmt.Fprintf(gen.out, "constexpr %s %s{%s};\n", typ, k.Name(), k.Val())
 	} else {
-		fmt.Fprintf(c.output, "constexpr %s %s{%s};\n", typ, k.Name(), k.Val())
+		fmt.Fprintf(gen.out, "constexpr %s %s{%s};\n", typ, k.Name(), k.Val())
 	}
 
 	return nil
@@ -620,7 +620,8 @@ func (c *Compiler) genNamespace(p *types.Package, mainBlock bool) (err error) {
 				return err
 			}
 		case *types.Const:
-			if err = c.genConst(t, mainBlock); err != nil {
+			gen := nodeGen{out: c.output}
+			if err = c.genConst(&gen, t, mainBlock); err != nil {
 				return err
 			}
 		default:
@@ -1088,8 +1089,15 @@ func (c *Compiler) genScopeVars(gen *nodeGen, node ast.Node, filter func(name st
 			if !filter(name) {
 				continue
 			}
-			if err = c.genVar(gen, scope.Lookup(name).(*types.Var), false); err != nil {
-				return err
+			switch ref := scope.Lookup(name).(type) {
+			case *types.Var:
+				if err = c.genVar(gen, ref, false); err != nil {
+					return err
+				}
+			case *types.Const:
+				if err = c.genConst(gen, ref, false); err != nil {
+					return err
+				}
 			}
 		}
 	}
