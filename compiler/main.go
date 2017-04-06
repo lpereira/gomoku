@@ -1258,10 +1258,17 @@ func (c *Compiler) genArrayType(a *ast.ArrayType) (s string, err error) {
 }
 
 func (c *Compiler) genIndexExpr(i *ast.IndexExpr) (s string, err error) {
-	if expr, err := c.genExpr(i.X); err == nil {
-		return fmt.Sprintf("[%s]", expr), nil
+	expr, err := c.genExpr(i.X)
+	if err != nil {
+		return "", nil
 	}
-	return "", err
+
+	index, err := c.genExpr(i.Index)
+	if err != nil {
+		return "", nil
+	}
+
+	return fmt.Sprintf("%s[%s]", expr, index), nil
 }
 
 func (c *Compiler) genDeferStmt(gen *nodeGen, d *ast.DeferStmt) (err error) {
