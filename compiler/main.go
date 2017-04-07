@@ -998,7 +998,7 @@ func (c *Compiler) genSelectorExpr(s *ast.SelectorExpr) (string, error) {
 		return fmt.Sprintf("%s.%s", lhs, s.Sel.Name), nil
 
 	case *ast.SelectorExpr:
-		lhs, err := c.genSelectorExpr(s)
+		lhs, err := c.genSelectorExpr(t)
 		if err != nil {
 			return "", err
 		}
