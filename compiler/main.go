@@ -1049,25 +1049,36 @@ func (c *Compiler) genForStmt(gen *nodeGen, f *ast.ForStmt) (err error) {
 		}
 	}
 
-	fmt.Fprintf(gen.out, "for (")
+	var isWhile bool
+	if f.Init == nil && f.Post == nil {
+		fmt.Fprintf(gen.out, "while (")
+		isWhile = true
+	} else {
+		fmt.Fprintf(gen.out, "for (")
 
-	if f.Init != nil {
-		if err = c.walk(gen, f.Init); err != nil {
-			return err
+		if f.Init != nil {
+			if err = c.walk(gen, f.Init); err != nil {
+				return err
+			}
 		}
+
+		fmt.Fprintf(gen.out, "; ")
 	}
 
-	fmt.Fprintf(gen.out, "; ")
 	if f.Cond != nil {
 		if err = c.walk(gen, f.Cond); err != nil {
 			return err
 		}
+	} else if isWhile {
+		fmt.Fprintf(gen.out, "true")
 	}
 
-	fmt.Fprintf(gen.out, "; ")
-	if f.Post != nil {
-		if err = c.walk(gen, f.Post); err != nil {
-			return err
+	if !isWhile {
+		fmt.Fprintf(gen.out, "; ")
+		if f.Post != nil {
+			if err = c.walk(gen, f.Post); err != nil {
+				return err
+			}
 		}
 	}
 

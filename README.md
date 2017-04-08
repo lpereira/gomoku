@@ -145,7 +145,7 @@ func gcd(x, y int) int {
 ### C++
 ```C++
 int gcd(int x, int y) {
-  for (; y != 0;) {
+  while (y != 0) {
     std::tie(x, y) = std::tuple<int, int>(y, x % y);
   }
   return x;
