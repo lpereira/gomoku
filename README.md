@@ -4,21 +4,10 @@ Gomoku is a compiler for programs written in the Go Programming
 Language, targeting modern C++.
 
 This is an experiment to determine how well Go will perform on embedded
-devices, where a port of existing compilers would prove to be actually
-more complicated due to the different expectations from platforms
-supported by gc: devices with severe memory restrictions and without
-virtual memory.
+devices.  Please see the FAQ for more details on the reasoning behind
+this project.
 
-The bulk of the compiler has been written in a day (April 1st, 2017). 
-The lexer, parser, and type system are part of the standard library
-already, so it was just the matter of tying everything together.
-
-As one would expect from such a young project, it still doesn't fully
-work.  The generated code still doesn't compile: only the input program
-itself is generated, plus type information and constants from imported
-packages.  (No method from packages are generated yet.)
-
-Any help to move this forward is greatly appreciated.
+Help to move this forward is greatly appreciated.
 
 # Sample code
 
@@ -231,28 +220,6 @@ To generate type system debugging information instead of C++ code, pass
 the -debugtype command line flag.  The output is very crude and only
 intended for those developing the compiler itself.
 
-# Moving forward
-
-There are many things that can (and need) to be performed before calling
-this even remotely usable.  Here's a short list of tasks and things that
-need to be implemented; it's by no means complete, and some of these tasks
-are way more challenging than others:
-
-- [ ] Reorganize the package in smaller files
-- [ ] Implement unit tests
-- [ ] Get pointer vs. value semantics as correct as possible
-- [ ] Implement type conversion
-- [ ] Implement type assertion (incl. type switches)
-- [ ] Implement basic Go data types (arrays, slices, and maps)
-- [x] Closures / anonymous functions
-- [x] Deferred statements
-- [x] Range-based loops
-- [x] Switch statement
-- [ ] Write a basic standard library for embedded devices
-- [ ] Memory management with garbage collection
-- [ ] Perform escape analysis to determine where to allocate things
-- [ ] Channels (including select statement)
-- [ ] Goroutines
 
 # FAQ
 
@@ -265,27 +232,117 @@ are different, but for the untrained eye, they look exactly the same.
 The parallels with the Go programming language and this compiler were too
 good to not make the pun.
 
-## Why not write an SSA backend for gc?
+## Why not just modify the Go compiler?
 
-That would be indeed a fun project -- but wouldn't solve the problem I'm
-interested in solving.  The compiler would still generate code that's
-suitable for a different kind of platform, and this would essentially
-just take care of the instruction set.  As it turns out, some of the
-platforms I'm interested are x86 microcontrollers, and most of their
-ISA is already supported by the existing gc backends.
+There are a few reasons:
 
-## Why not use the golang.org/x/tools/go/ssa package instead?
+* There are many architectures out there that I'd like to support, and
+writing a backend for every single one of them would be impractical. 
+Mainly, I'd like to support x86, ARC, ARM Thumb, Xtensa, and RISC-V. 
+x86 is already (well) supported by the reference Go compiler, but
+microcontroller class x86 will often sport an older ISA (usually i586
+class CPU or older).
+* Go was never designed for embedded applications, specially when
+executing on environments with severe memory restrictions such as many
+microcontrollers.
+* While I don't personally like C++, the modern variants are powerful,
+reasonably expressive, and compilers such as GCC and Clang leverage
+years of engineering time in order to produce correct, efficient code. 
+All the while supporting all the architectures that I want to support.
+* The Go compiler was recently changed to use an SSA backend; this made
+it easier to write backends, and it's possible to write one that
+generates C code.  This would mostly take care of the instruction set,
+though, still leaving on the table many of the assumptions for the kind
+of operating systems the reference compiler has been designed to
+generate code for.
+* This is a good challenge and a great way to learn all the nooks and
+crannies of a language.
 
-I haven't looked at that package close enough.  It does state two things,
-though: it's not intended for machine code generation and has an interface
-that's likely to change.  Having said that, this package looks promising,
-and I might revisit this idea one day, when I learn more about SSA.
+## What's the license?
 
-In any case, I'm also very inexperienced in Go -- and writing a compiler
-for the language, instead of just generating code from higher-level nodes,
-is proving to a useful way to learn every nook and cranny.
+It's a 2-clause BSD.
 
-## What's the license? Is there any code of conduct?
+## I'd like to contribute.  Is there a code of conduct?
 
-Nothing new here:  I'm adopting the same license as Go itself (see the 
-LICENSE file) and the same code of conduct that the community knows.
+Yes.  [We're using the same code that the Go commmunity
+uses](https://golang.org/conduct).
+
+## When it will actually be able to generate compilable code?
+
+It's hard to tell; there are still a lot of things to do.  Some of them
+are easier than others, but there are a lot of subtle details that are
+hard to get right.
+
+But we're very open to contributions, so if you'd like to see this
+happen faster, you know what to do.
+
+## Will it be self-hosting?
+
+The original Go compiler was written in C, mechanically translated to
+Go (with manual work to fix up the translation).  If this compiler
+could compile itself, it would be almost a full circle.  While awesome,
+we're quite far away from this possibility.
+
+## What platforms will this support?
+
+At first, I'm going to support Linux, linking with STL.  The reason is
+that I want to use tools such as AddressSanitizer and Valgrind in order
+to find bugs.
+
+Afterwards, it's very possible that an RTOS such as Zephyr will be
+supported.  There's a good possibility that STL will be ditched at this
+point, favoring either something existing but lightweight, or something
+custom made.
+
+In any case, compilation for different operating systems and/or
+architectures should be as simple as setting the GOOS and GOARCH
+environment variables, or different but related variables that will be
+specific to Gomoku.
+
+## Are there unit tests?
+
+No, not yet.  This is a must and will happen soon.
+
+## What about memory management, what's going to be the strategy?
+
+At first, a stop-the-world-mark-and-sweep garbage collector, with
+collection happening at allocation phase, when there's no more heap
+space available.  This will most likely be custom made, but
+experimnents with existing collectors might be performed -- if they're
+adequate, there will be no need to write (or modify) one.
+
+## Will it use the Go standard library?
+
+At first, yes, as that's what we already have.  However, it's very
+likely that a lightweight library will be written for embedded devices.
+
+## What's necessary to have this actually work?
+
+There are many things that can (and need) to be performed before calling
+this even remotely usable.  Here's a short list of tasks and things that
+need to be implemented; it's by no means complete, and some of these tasks
+are way more challenging than others:
+
+- [ ] Generating code for imports, not only type information
+- [ ] Ensuring that all types implementing interfaces are assignable to the interface type
+- [ ] Fixing the order of generated types
+- [ ] Reorganize the package in smaller files
+- [ ] Implement unit tests
+- [ ] Get pointer vs. value semantics as correct as possible
+- [ ] Implement type conversion
+- [ ] Implement type assertion (incl. type switches)
+- [ ] Implement basic Go data types (arrays, slices, and maps)
+- [x] Nil values
+- [ ] Comparison with nil values
+- [ ] Built-in functions (e.g. make(), new(), append(), cap(), etc.)
+- [ ] Escape analysis
+- [x] Closures / anonymous functions
+- [x] Deferred statements
+- [x] Range-based loops
+- [x] Switch statement
+- [x] If statement
+- [ ] Write a basic standard library for embedded devices
+- [ ] Memory management with garbage collection
+- [ ] Perform escape analysis to determine where to allocate things
+- [ ] Channels (including select statement)
+- [ ] Goroutines
