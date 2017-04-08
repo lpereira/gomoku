@@ -204,6 +204,60 @@ _ident_0_:
 }
 ```
 
+## Button and LED sample from Gobot's Getting Started
+
+### Go
+```Go
+func main() {
+        firmataAdaptor := firmata.NewAdaptor("/dev/ttyACM0")
+
+        button := gpio.NewButtonDriver(firmataAdaptor, "5")
+        led := gpio.NewLedDriver(firmataAdaptor, "13")
+
+        work := func() {
+                button.On(gpio.ButtonPush, func(data interface{}) {
+                        led.On()
+                })
+                button.On(gpio.ButtonRelease, func(data interface{}) {
+                        led.Off()
+                })
+        }
+
+        robot := gobot.NewRobot("buttonBot",
+                []gobot.Connection{firmataAdaptor},
+                []gobot.Device{button, led},
+                work,
+        )
+
+        robot.Start()
+}
+```
+
+### C++
+```C++
+void _main() {
+  ButtonDriver *button{std::nullptr};
+  Adaptor *firmataAdaptor{std::nullptr};
+  LedDriver *led{std::nullptr};
+  Robot *robot{std::nullptr};
+  std::function<void()> work{std::nullptr};
+
+  firmataAdaptor = firmata::NewAdaptor("/dev/ttyACM0");
+  button = gpio::NewButtonDriver(firmataAdaptor, "5");
+  led = gpio::NewLedDriver(firmataAdaptor, "13");
+  work = [=]() mutable -> void {
+    button->On(gpio::ButtonPush,
+               [=](moku::empty_interface data) mutable -> void { led->On(); });
+    button->On(gpio::ButtonRelease,
+               [=](moku::empty_interface data) mutable -> void { led->Off(); });
+  };
+  robot = gobot::NewRobot("buttonBot",
+                          moku::slice<gobot::Connection>{firmataAdaptor},
+                          moku::slice<gobot::Device>{button, led}, work);
+  robot->Start();
+}
+```
+
 # Usage
 
 The program is parsed from the standard input and written to the standard
@@ -238,17 +292,18 @@ There are a few reasons:
 
 * There are many architectures out there that I'd like to support, and
 writing a backend for every single one of them would be impractical. 
-Mainly, I'd like to support x86, ARC, ARM Thumb, Xtensa, and RISC-V. 
+Mainly, We'd like to support x86, ARC, ARM Thumb, Xtensa, and RISC-V. 
 x86 is already (well) supported by the reference Go compiler, but
 microcontroller class x86 will often sport an older ISA (usually i586
 class CPU or older).
 * Go was never designed for embedded applications, specially when
 executing on environments with severe memory restrictions such as many
 microcontrollers.
-* While I don't personally like C++, the modern variants are powerful,
-reasonably expressive, and compilers such as GCC and Clang leverage
-years of engineering time in order to produce correct, efficient code. 
-All the while supporting all the architectures that I want to support.
+* While C++ is a language that people love to hate, the modern variants are
+powerful, reasonably expressive, and compilers such as GCC and Clang
+leverage years of engineering time in order to produce correct, efficient
+code.  All the while supporting all the architectures that we'd want to
+support.
 * The Go compiler was recently changed to use an SSA backend; this made
 it easier to write backends, and it's possible to write one that
 generates C code.  This would mostly take care of the instruction set,
@@ -307,14 +362,18 @@ No, not yet.  This is a must and will happen soon.
 
 At first, a stop-the-world-mark-and-sweep garbage collector, with
 collection happening at allocation phase, when there's no more heap
-space available.  This will most likely be custom made, but
-experimnents with existing collectors might be performed -- if they're
-adequate, there will be no need to write (or modify) one.
+space available.
+
+This will most likely be custom made, but experimnents with existing
+collectors might be performed -- if they're adequate, there will be no need
+to write (or modify) one.
 
 ## Will it use the Go standard library?
 
 At first, yes, as that's what we already have.  However, it's very
 likely that a lightweight library will be written for embedded devices.
+Not everything should be written from scratch, though; some parts from the
+standard library might be cherry-picked.
 
 ## What's necessary to have this actually work?
 
