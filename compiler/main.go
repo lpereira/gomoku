@@ -985,6 +985,13 @@ func (c *Compiler) genSelectorExpr(s *ast.SelectorExpr) (string, error) {
 		return "", fmt.Errorf("Sel not found for X: %s", s)
 	}
 
+	selector := "."
+	if typ, ok := c.inf.Types[s.X]; ok {
+		if _, ok := typ.Type.(*types.Pointer); ok {
+			selector = "->"
+		}
+	}
+
 	switch t := s.X.(type) {
 	default:
 		return "", fmt.Errorf("Unknown type for left-side of selector: %s", reflect.TypeOf(t))
@@ -995,7 +1002,7 @@ func (c *Compiler) genSelectorExpr(s *ast.SelectorExpr) (string, error) {
 			return "", err
 		}
 
-		return fmt.Sprintf("%s.%s", lhs, s.Sel.Name), nil
+		return fmt.Sprintf("%s%s%s", lhs, selector, s.Sel.Name), nil
 
 	case *ast.SelectorExpr:
 		lhs, err := c.genSelectorExpr(t)
@@ -1003,7 +1010,7 @@ func (c *Compiler) genSelectorExpr(s *ast.SelectorExpr) (string, error) {
 			return "", err
 		}
 
-		return fmt.Sprintf("%s.%s", lhs, s.Sel.Name), nil
+		return fmt.Sprintf("%s%s%s", lhs, selector, s.Sel.Name), nil
 
 	case *ast.Ident:
 		if pkg := obj.Pkg(); pkg != nil && pkg.Name() == t.Name {
@@ -1012,7 +1019,7 @@ func (c *Compiler) genSelectorExpr(s *ast.SelectorExpr) (string, error) {
 		if this := c.recvs.Lookup(t.Name); this != nil {
 			return fmt.Sprintf("this->%s", s.Sel.Name), nil
 		}
-		return fmt.Sprintf("%s.%s", t.Name, s.Sel.Name), nil
+		return fmt.Sprintf("%s%s%s", t.Name, selector, s.Sel.Name), nil
 	}
 }
 
