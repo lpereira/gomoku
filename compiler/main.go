@@ -1164,17 +1164,19 @@ func (c *Compiler) genReturnStmt(gen *nodeGen, r *ast.ReturnStmt) (err error) {
 		return c.walk(gen, r.Results[0])
 	}
 
-	fmt.Fprintf(gen.out, "{")
-	for i, e := range r.Results {
-		if err = c.walk(gen, e); err != nil {
-			return err
-		}
+	if len(r.Results) > 0 {
+		fmt.Fprintf(gen.out, "{")
+		for i, e := range r.Results {
+			if err = c.walk(gen, e); err != nil {
+				return err
+			}
 
-		if i != len(r.Results)-1 {
-			fmt.Fprint(gen.out, ", ")
+			if i != len(r.Results)-1 {
+				fmt.Fprint(gen.out, ", ")
+			}
 		}
+		fmt.Fprintf(gen.out, "}")
 	}
-	fmt.Fprintf(gen.out, "}")
 
 	return nil
 }
