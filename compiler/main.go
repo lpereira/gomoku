@@ -32,6 +32,8 @@ type Compiler struct {
 	recvs VarStack
 
 	idents int
+
+	curVarType types.Type
 }
 
 type VarStack struct {
@@ -728,10 +730,33 @@ func (c *Compiler) genStarExpr(s *ast.StarExpr) (string, error) {
 	return c.genUnaryExpr(&ast.UnaryExpr{X: s.X, Op: token.MUL})
 }
 
+func (c *Compiler) genKeyValueExpr(kv *ast.KeyValueExpr) (string, error) {
+	key, err := c.genExpr(kv.Key)
+	if err != nil {
+		return "", err
+	}
+	val, err := c.genExpr(kv.Value)
+	if err != nil {
+		return "", err
+	}
+
+	switch typ := c.curVarType.(type) {
+	default:
+		return "", fmt.Errorf("Can't generate KeyValueExpr for type %s", reflect.TypeOf(typ))
+	case *types.Named:
+		return fmt.Sprintf("%s: %s", key, val), nil
+	case *types.Map:
+		return fmt.Sprintf("{%s, %s}", key, val), nil
+	}
+}
+
 func (c *Compiler) genExpr(x ast.Expr) (string, error) {
 	switch x := x.(type) {
 	default:
 		return "", fmt.Errorf("Couldn't generate expression with type: %s", reflect.TypeOf(x))
+
+	case *ast.KeyValueExpr:
+		return c.genKeyValueExpr(x)
 
 	case *ast.StarExpr:
 		return c.genStarExpr(x)
@@ -903,21 +928,31 @@ func (c *Compiler) genFuncDecl(gen *nodeGen, f *ast.FuncDecl) (err error) {
 }
 
 func (c *Compiler) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
-	if len(a.Lhs) == 1 {
-		if err = c.walk(gen, a.Lhs[0]); err != nil {
+	var varTypes []types.Type
+	var vars []string
+
+	defer func() { c.curVarType = nil }()
+
+	for _, e := range a.Lhs {
+		v, err := c.genExpr(e)
+		if err != nil {
 			return err
 		}
+		vars = append(vars, v)
+	}
+	for _, e := range a.Rhs {
+		typ, ok := c.inf.Types[e]
+		if !ok {
+			return fmt.Errorf("Couldn't determine type of variable: %s", e)
+		}		
+
+		varTypes = append(varTypes, typ.Type)
+	}
+
+	if len(vars) == 1 {
+		fmt.Fprint(gen.out, vars[0])
 	} else {
-		fmt.Fprint(gen.out, "std::tie(")
-		for i, e := range a.Lhs {
-			if err = c.walk(gen, e); err != nil {
-				return err
-			}
-			if i < len(a.Lhs)-1 {
-				fmt.Fprint(gen.out, ", ")
-			}
-		}
-		fmt.Fprint(gen.out, ")")
+		fmt.Fprintf(gen.out, "std::tie(%s)", strings.Join(vars, ", "))
 	}
 
 	var tupleOk bool
@@ -953,6 +988,7 @@ func (c *Compiler) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
 	}
 
 	if len(a.Rhs) == 1 {
+		c.curVarType = varTypes[0]
 		return c.walk(gen, a.Rhs[0])
 	}
 
@@ -960,23 +996,19 @@ func (c *Compiler) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
 		return fmt.Errorf("Rhs incompatible with Lhs")
 	}
 
-	var types []string
-	for _, e := range a.Rhs {
-		typ, ok := c.inf.Types[e]
-		if !ok {
-			return fmt.Errorf("Couldn't determine type of expression")
-		}
-
-		ctyp, err := c.toTypeSig(typ.Type)
+	var sigs []string
+	for i, _ := range a.Rhs {
+		sig, err := c.toTypeSig(varTypes[i])
 		if err != nil {
 			return fmt.Errorf("Couldn't get type signature: %s", err)
 		}
 
-		types = append(types, ctyp)
+		sigs = append(sigs, sig)
 	}
-
-	fmt.Fprintf(gen.out, "std::tuple<%s>(", strings.Join(types, ", "))
+	fmt.Fprintf(gen.out, "std::tuple<%s>(", strings.Join(sigs, ", "))
 	for i, e := range a.Rhs {
+		c.curVarType = varTypes[i]
+
 		if err = c.walk(gen, e); err != nil {
 			return err
 		}
@@ -1232,11 +1264,11 @@ func (c *Compiler) genCompositeLit(cl *ast.CompositeLit) (str string, err error)
 
 	var elts []string
 	for _, e := range cl.Elts {
-		if elt, err := c.genExpr(e); err == nil {
-			elts = append(elts, elt)
-			continue
+		elt, err := c.genExpr(e)
+		if err != nil {
+			return "", err
 		}
-		return "", err
+		elts = append(elts, elt)
 	}
 
 	return fmt.Sprintf("%s{%s}", typ, strings.Join(elts, ", ")), nil
