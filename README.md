@@ -285,9 +285,9 @@ we're quite far away from this possibility.
 
 ## What platforms will this support?
 
-At first, I'm going to support Linux, linking with STL.  The reason is
-that I want to use tools such as AddressSanitizer and Valgrind in order
-to find bugs.
+At first, Linux with STL is going to be the only supported platform. 
+The reason is that tools such as AddressSanitizer and Valgrind are
+invaluable when debugging.
 
 Afterwards, it's very possible that an RTOS such as Zephyr will be
 supported.  There's a good possibility that STL will be ditched at this
@@ -325,7 +325,7 @@ are way more challenging than others:
 
 - [ ] Generating code for imports, not only type information
 - [ ] Ensuring that all types implementing interfaces are assignable to the interface type
-- [ ] Fixing the order of generated types
+- [ ] Fix the order of generated types
 - [ ] Reorganize the package in smaller files
 - [ ] Implement unit tests
 - [ ] Get pointer vs. value semantics as correct as possible
@@ -335,7 +335,6 @@ are way more challenging than others:
 - [x] Nil values
 - [ ] Comparison with nil values
 - [ ] Built-in functions (e.g. make(), new(), append(), cap(), etc.)
-- [ ] Escape analysis
 - [x] Closures / anonymous functions
 - [x] Deferred statements
 - [x] Range-based loops
