@@ -125,9 +125,9 @@ func init() {
 		types.Float32:       {"0", "float"},
 		types.UntypedFloat:  {"0", "float"},
 		types.Float64:       {"0", "double"},
-		types.String:        {"0", "std::string"},
-		types.UntypedString: {"0", "std::string"},
-		types.UnsafePointer: {"0", "void*"},
+		types.String:        {"\"\"", "std::string"},
+		types.UntypedString: {"\"\"", "std::string"},
+		types.UnsafePointer: {"std::nullptr", "void*"},
 	}
 	goTypeToBasic = map[string]types.BasicKind{
 		"bool":    types.Bool,
