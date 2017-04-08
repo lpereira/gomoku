@@ -832,6 +832,10 @@ func (c *Compiler) genMain() (err error) {
 type nodeGen struct {
 	out      io.Writer
 	hasDefer bool
+
+	// SwitchStmt generation
+	labels         []string
+	curLbl, defLbl int
 }
 
 func (c *Compiler) genComment(gen *nodeGen, comment *ast.Comment) error {
@@ -1101,7 +1105,7 @@ func (c *Compiler) genBlockStmt(gen *nodeGen, blk *ast.BlockStmt) (err error) {
 		default:
 			fmt.Fprintln(gen.out, ";")
 
-		case *ast.ForStmt, *ast.DeclStmt, *ast.IfStmt, *ast.RangeStmt:
+		case *ast.ForStmt, *ast.DeclStmt, *ast.IfStmt, *ast.RangeStmt, *ast.SwitchStmt:
 		}
 	}
 	return nil
@@ -1302,7 +1306,10 @@ func (c *Compiler) genBranchStmt(gen *nodeGen, b *ast.BranchStmt) (err error) {
 		}
 		fmt.Fprintf(gen.out, "continue")
 	case token.FALLTHROUGH:
-		return fmt.Errorf("Fallthrough not supported yet")
+		if gen.labels == nil {
+			return fmt.Errorf("fallthrough outside switch")
+		}
+		fmt.Fprintf(gen.out, "goto %s", gen.labels[gen.curLbl + 1])
 	}
 	return nil
 }
@@ -1520,6 +1527,129 @@ func (c *Compiler) genFuncLit(f *ast.FuncLit) (str string, err error) {
 	return litGen.out.(*bytes.Buffer).String(), nil
 }
 
+func (c *Compiler) genSwitchStmt(gen *nodeGen, s *ast.SwitchStmt) (err error) {
+	scope, ok := c.inf.Scopes[s]
+	if !ok {
+		return fmt.Errorf("Could not find scope")
+	}
+
+	if len(scope.Names()) > 0 {
+		fmt.Fprintf(gen.out, "{")
+		defer fmt.Fprintf(gen.out, "}")
+	}
+
+	for _, name := range scope.Names() {
+		obj := scope.Lookup(name)
+		v := obj.(*types.Var)
+		if err = c.genVar(gen, v, false); err != nil {
+			return err
+		}
+	}
+
+	if s.Init != nil {
+		if err = c.walk(gen, s.Init); err != nil {
+			return err
+		}
+		fmt.Fprint(gen.out, ";")
+	}
+
+	// FIXME: Might not have to generate label identifiers if no
+	// fallthrough statement is present in any of the case clauses
+	var lbls []string
+	for range s.Body.List {
+		lbls = append(lbls, c.newIdent())
+	}
+	gen.labels = lbls
+	defer func() { gen.labels = nil }()
+
+	var tag string
+	if s.Tag != nil {
+		tag, err = c.genExpr(s.Tag)
+		if err != nil {
+			return err
+		}
+	}
+
+	var defClause *ast.CaseClause
+	for idx, stmt := range s.Body.List {
+		clause := stmt.(*ast.CaseClause)
+		if clause.List == nil {
+			defClause = clause
+			gen.defLbl = idx
+			break
+		}
+	}
+
+	first := true
+	for idx, stmt := range s.Body.List {
+		clause := stmt.(*ast.CaseClause)
+
+		if clause.List == nil {
+			continue
+		}
+
+		gen.curLbl = idx
+
+		if first {
+			fmt.Fprint(gen.out, "if ")
+			first = false
+		} else {
+			fmt.Fprint(gen.out, "else if ")
+		}
+
+		var exprs []string
+		for _, x := range clause.List {
+			expr, err := c.genExpr(x)
+			if err != nil {
+				return err
+			}
+
+			if len(tag) > 0 {
+				exprs = append(exprs, fmt.Sprintf("(%s == %s)", tag, expr))
+			} else {
+				exprs = append(exprs, fmt.Sprintf("(%s)", expr))
+			}
+		}
+
+		fmt.Fprintf(gen.out, "(%s) {", strings.Join(exprs, " || "))
+		fmt.Fprintf(gen.out, "%s:\n", lbls[idx])
+
+		if clause.Body != nil {
+			// FIXME: the scope here is not generated; maybe
+			// fix genBlockStmt to generate it?
+			blk := ast.BlockStmt{List: clause.Body}
+			if c.genBlockStmt(gen, &blk); err != nil {
+				return err
+			}
+		}
+
+		fmt.Fprintf(gen.out, "}")
+	}
+
+	if defClause != nil {
+		gen.curLbl = gen.defLbl
+
+		if first {
+			fmt.Fprintf(gen.out, "if ")
+		} else {
+			fmt.Fprintf(gen.out, "else ")
+		}
+		fmt.Fprintf(gen.out, "{")
+		fmt.Fprintf(gen.out, "%s:\n", lbls[gen.defLbl])
+
+		if defClause.Body != nil {
+			blk := ast.BlockStmt{List: defClause.Body}
+			if c.genBlockStmt(gen, &blk); err != nil {
+				return err
+			}
+		}
+
+		fmt.Fprintf(gen.out, "}")
+	}
+
+	return nil
+}
+
 func (c *Compiler) walk(gen *nodeGen, node ast.Node) error {
 	switch n := node.(type) {
 	default:
@@ -1533,6 +1663,9 @@ func (c *Compiler) walk(gen *nodeGen, node ast.Node) error {
 
 		fmt.Fprint(gen.out, out)
 		return nil
+
+	case *ast.SwitchStmt:
+		return c.genSwitchStmt(gen, n)
 
 	case *ast.BlockStmt:
 		return c.genBlockStmt(gen, n)

@@ -152,6 +152,69 @@ int gcd(int x, int y) {
 }
 ```
 
+## Switch statement (tagged)
+
+### Go
+```Go
+switch i {
+default:
+        println(4)
+        fallthrough
+case 1:
+        println(1)
+case 2:
+        println(2)
+case 3:
+        println(3)
+}
+```
+
+### C++
+```C++
+if ((i == 1)) {
+_ident_1_:
+  println(1);
+} else if ((i == 2)) {
+_ident_2_:
+  println(2);
+} else if ((i == 3)) {
+_ident_3_:
+  println(3);
+} else {
+_ident_0_:
+  println(4);
+  goto _ident_1_;
+}
+```
+
+## Switch statement (non-tagged)
+
+### Go
+```Go
+switch {
+default:
+        println(0)
+case i > 10 && i != 50:
+        println(1)
+case i < 20, i > 150:
+        println(2)
+}
+```
+
+### C++
+```C++
+if ((i > 10 && i != 50)) {
+_ident_1_:
+  println(1);
+} else if ((i < 20) || (i > 150)) {
+_ident_2_:
+  println(2);
+} else {
+_ident_0_:
+  println(0);
+}
+```
+
 # Usage
 
 The program is parsed from the standard input and written to the standard
@@ -179,11 +242,12 @@ are way more challenging than others:
 - [ ] Implement unit tests
 - [ ] Get pointer vs. value semantics as correct as possible
 - [ ] Implement type conversion
+- [ ] Implement type assertion (incl. type switches)
 - [ ] Implement basic Go data types (arrays, slices, and maps)
 - [x] Closures / anonymous functions
 - [x] Deferred statements
 - [x] Range-based loops
-- [ ] Switch statement
+- [x] Switch statement
 - [ ] Write a basic standard library for embedded devices
 - [ ] Memory management with garbage collection
 - [ ] Perform escape analysis to determine where to allocate things
