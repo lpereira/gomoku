@@ -57,7 +57,7 @@ func (s *VarStack) Curr() *types.Var { return s.vars[s.count-1] }
 func (s *VarStack) Lookup(name string) *types.Var {
 	for cur := s.count - 1; cur >= 0; cur-- {
 		if v := s.vars[cur]; v != nil && name == v.Name() {
-			return s.vars[cur]
+			return v
 		}
 	}
 	return nil
