@@ -463,6 +463,7 @@ func (c *Compiler) genStruct(name string, s *types.Struct, n *types.Named) (err 
 
 		fmt.Fprint(c.output, " {\n")
 		numFields := s.NumFields()
+		var nilCmp []string
 		for f := 0; f < numFields; f++ {
 			f := s.Field(f)
 
@@ -477,12 +478,17 @@ func (c *Compiler) genStruct(name string, s *types.Struct, n *types.Named) (err 
 			}
 
 			if nilVal != "" {
+				nilCmp = append(nilCmp, fmt.Sprintf("%s == %s", f.Name(), nilVal))
+
 				fmt.Fprintf(c.output, "%s %s{%s};\n", typ, f.Name(), nilVal)
 				continue
 			}
 
+			nilCmp = append(nilCmp, fmt.Sprintf("%s._isNil_()", f.Name()))
 			fmt.Fprintf(c.output, "%s %s;\n", typ, f.Name())
 		}
+
+		fmt.Fprintf(c.output, "bool _isNil_() const { return %s; }", strings.Join(nilCmp, " && "));
 		return nil
 	})
 }
@@ -509,6 +515,7 @@ func (c *Compiler) genBasicType(name string, b *types.Basic, n *types.Named) (er
 
 		fmt.Fprintf(c.output, ": %s {\n", strings.Join(base, ", "))
 		fmt.Fprintf(c.output, "%s() : moku::basic<%s>{%s} {}\n", name, typ, nilValue)
+		fmt.Fprintf(c.output, "bool _isNil_() const { return %s(this) == %s; }", typ, nilValue)
 
 		return nil
 	})
@@ -1149,7 +1156,26 @@ func (c *Compiler) genBinaryExpr(b *ast.BinaryExpr) (s string, err error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s %s %s", x, b.Op, y), nil
+
+	nilCmp := func(expr string, op token.Token) (string, error) {
+		switch b.Op {
+		case token.EQL:
+			return fmt.Sprintf("moku::is_nil(%s)", x), nil
+		case token.NEQ:
+			return fmt.Sprintf("!moku::is_nil(%s)", x), nil
+		default:
+			return "", fmt.Errorf("nil can only be compared with equality")
+		}
+	}
+
+	switch {
+	case y == "nil":
+		return nilCmp(x, b.Op)
+	case x == "nil":
+		return nilCmp(y, b.Op)
+	default:
+		return fmt.Sprintf("%s %s %s", x, b.Op, y), nil
+	}
 }
 
 func (c *Compiler) genField(gen *nodeGen, f *ast.Field) error {
