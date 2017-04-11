@@ -99,7 +99,7 @@ func (c *Compiler) genPackage(pkg *loader.PackageInfo) error {
 func clearDirectory(path string) error {
 	dir, err := os.Open(path)
 	if err != nil {
-		return err
+		return nil
 	}
 	defer dir.Close()
 
