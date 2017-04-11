@@ -1000,26 +1000,7 @@ func (c *CppGen) genSelectorExpr(s *ast.SelectorExpr) (string, error) {
 
 	switch t := s.X.(type) {
 	default:
-		return "", fmt.Errorf("Unknown type for left-side of selector: %s", reflect.TypeOf(t))
-
-	case *ast.IndexExpr:
-		lhs, err := c.genIndexExpr(t)
-		if err != nil {
-			return "", err
-		}
-
-		return fmt.Sprintf("%s%s%s", lhs, selector, s.Sel.Name), nil
-
-	case *ast.CallExpr:
-		lhs, err := c.genCallExpr(t)
-		if err != nil {
-			return "", err
-		}
-
-		return fmt.Sprintf("%s%s%s", lhs, selector, s.Sel.Name), nil
-
-	case *ast.SelectorExpr:
-		lhs, err := c.genSelectorExpr(t)
+		lhs, err := c.genExpr(t)
 		if err != nil {
 			return "", err
 		}
