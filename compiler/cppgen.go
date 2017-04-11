@@ -703,13 +703,12 @@ func (c *CppGen) genKeyValueExpr(kv *ast.KeyValueExpr) (string, error) {
 		return "", err
 	}
 
-	switch typ := c.curVarType.(type) {
+	switch c.curVarType.(type) {
 	default:
-		return "", fmt.Errorf("Can't generate KeyValueExpr for type %s", reflect.TypeOf(typ))
+		return fmt.Sprintf("{%s, %s}", key, val), nil
+
 	case *types.Named:
 		return fmt.Sprintf("%s: %s", key, val), nil
-	case *types.Map:
-		return fmt.Sprintf("{%s, %s}", key, val), nil
 	}
 }
 
