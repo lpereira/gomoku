@@ -6,6 +6,7 @@ package compiler
 
 import (
 	"fmt"
+	"go/ast"
 	"go/importer"
 	"go/types"
 	"golang.org/x/tools/go/loader"
@@ -71,28 +72,47 @@ func New(args []string, outDir string) (*Compiler, error) {
 	return &compiler, nil
 }
 
-func (c *Compiler) genPackage(pkg *loader.PackageInfo) error {
-	name := filepath.Join(c.outDir, fmt.Sprintf("%s.cpp", pkg.Pkg.Name()))
-	out, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE, 0644)
+func (c *Compiler) genFile(name string, pkg *loader.PackageInfo, ast *ast.File, out func(*CppGen) error) error {
+	f, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer f.Close()
 
-	fmt.Printf("Generating: %s\n", name)
+	gen := CppGen{
+		fset:         c.program.Fset,
+		ast:          ast,
+		pkg:          pkg.Pkg,
+		inf:          pkg.Info,
+		output:       f,
+		symbolFilter: &c.symbolFilter,
+	}
+
+	if err := out(&gen); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Compiler) genPackage(pkg *loader.PackageInfo) error {
+	genImpl := func(gen *CppGen) error { return gen.GenerateImpl() }
+	genHdr := func(gen *CppGen) error { return gen.GenerateHdr() }
 
 	for _, ast := range pkg.Files {
-		gen := CppGen{
-			fset:   c.program.Fset,
-			ast:    ast,
-			pkg:    pkg.Pkg,
-			inf:    pkg.Info,
-			output: out,
+		name := fmt.Sprintf("%s.cpp", ast.Name.Name)
+		err := c.genFile(filepath.Join(c.outDir, name), pkg, ast, genImpl)
+		if err != nil {
+			return err
 		}
-		if err := gen.Generate(); err != nil {
+
+		name = fmt.Sprintf("%s.h", ast.Name.Name)
+		err = c.genFile(filepath.Join(c.outDir, name), pkg, ast, genHdr)
+		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
