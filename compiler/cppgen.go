@@ -1092,6 +1092,10 @@ func (c *CppGen) genForStmt(gen *nodeGen, f *ast.ForStmt) (err error) {
 }
 
 func (c *CppGen) genBlockStmt(gen *nodeGen, blk *ast.BlockStmt) (err error) {
+	if blk == nil || blk.List == nil {
+		return nil
+	}
+
 	for _, stmt := range blk.List {
 		if err = c.walk(gen, stmt); err != nil {
 			return err
