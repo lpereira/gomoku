@@ -561,12 +561,14 @@ func (c *CppGen) genConst(gen *nodeGen, k *types.Const, mainBlock bool) error {
 func (c *CppGen) genNamespace(p *types.Package, mainBlock bool) (err error) {
 	if !mainBlock {
 		fmt.Fprintf(c.output, "namespace %s {\n", p.Name())
+		defer fmt.Fprintf(c.output, "} // namespace %s\n", p.Name())
 	}
 
 	genTypeProto := func(name string, obj types.Object) error {
 		switch t := obj.Type().(type) {
 		default:
 			return nil
+
 		case *types.Named:
 			return c.genNamedType(name, t)
 
@@ -613,10 +615,6 @@ func (c *CppGen) genNamespace(p *types.Package, mainBlock bool) (err error) {
 		default:
 			return fmt.Errorf("Don't know how to generate: %s", reflect.TypeOf(t))
 		}
-	}
-
-	if !mainBlock {
-		fmt.Fprintf(c.output, "} // namespace %s\n", p.Name())
 	}
 
 	return nil
