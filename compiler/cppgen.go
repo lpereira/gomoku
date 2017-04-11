@@ -8,8 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
-	"go/importer"
-	"go/parser"
 	"go/token"
 	"go/types"
 	"io"
@@ -63,41 +61,6 @@ func (s *VarStack) Lookup(name string) *types.Var {
 		}
 	}
 	return nil
-}
-
-func New(in io.Reader, out io.Writer) (*CppGen, error) {
-	c := CppGen{
-		fset: token.NewFileSet(),
-		inf: types.Info{
-			Types:      make(map[ast.Expr]types.TypeAndValue),
-			Defs:       make(map[*ast.Ident]types.Object),
-			Uses:       make(map[*ast.Ident]types.Object),
-			Selections: make(map[*ast.SelectorExpr]*types.Selection),
-			Implicits:  make(map[ast.Node]types.Object),
-			Scopes:     make(map[ast.Node]*types.Scope),
-		},
-		input:  in,
-		output: out,
-	}
-
-	f, err := parser.ParseFile(c.fset, "input.go", in, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	conf := types.Config{
-		Importer:         importer.Default(),
-		IgnoreFuncBodies: false,
-	}
-	pkg, err := conf.Check("test/input", c.fset, []*ast.File{f}, &c.inf)
-	if err != nil {
-		return nil, err
-	}
-
-	c.ast = f
-	c.pkg = pkg
-
-	return &c, nil
 }
 
 type basicTypeInfo struct {
@@ -1768,47 +1731,4 @@ func (c *CppGen) Generate() (err error) {
 	}
 
 	return nil
-}
-
-func (c *CppGen) DebugTypeSystem() {
-	fmt.Println("----- defs ---------------------------")
-	for k, v := range c.inf.Defs {
-		fmt.Fprintf(c.output, "k<%s>=%+v\n", reflect.TypeOf(k), k)
-		fmt.Fprintf(c.output, "v<%s>=%+v\n\n", reflect.TypeOf(v), v)
-	}
-
-	fmt.Println("----- types ---------------------------")
-	for k, v := range c.inf.Types {
-		fmt.Fprintf(c.output, "k<%s>=%+v\n", reflect.TypeOf(k), k)
-		fmt.Fprintf(c.output, "v<%s>=%+v\n\n", reflect.TypeOf(v), v)
-	}
-
-	fmt.Println("----- uses ---------------------------")
-	for k, v := range c.inf.Uses {
-		fmt.Fprintf(c.output, "k<%s>=%+v\n", reflect.TypeOf(k), k)
-		fmt.Fprintf(c.output, "v<%s>=%+v\n\n", reflect.TypeOf(v), v)
-	}
-
-	fmt.Println("----- scopes ---------------------------")
-	for k, v := range c.inf.Scopes {
-		fmt.Fprintf(c.output, "k<%s>=%+v\n", reflect.TypeOf(k), k)
-		fmt.Fprintf(c.output, "v<%s>=%+v\n\n", reflect.TypeOf(v), v)
-	}
-
-	fmt.Println("----- initialization -------------------")
-	for _, i := range c.inf.InitOrder {
-		fmt.Println(i)
-	}
-
-	fmt.Println("----- implicits ---------------------------")
-	for k, v := range c.inf.Implicits {
-		fmt.Fprintf(c.output, "k<%s>=%+v\n", reflect.TypeOf(k), k)
-		fmt.Fprintf(c.output, "v<%s>=%+v\n\n", reflect.TypeOf(v), v)
-	}
-
-	fmt.Println("----- selections ---------------------------")
-	for k, v := range c.inf.Selections {
-		fmt.Fprintf(c.output, "k<%s>=%+v\n", reflect.TypeOf(k), k)
-		fmt.Fprintf(c.output, "v<%s>=%+v\n\n", reflect.TypeOf(v), v)
-	}
 }
