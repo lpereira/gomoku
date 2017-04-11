@@ -25,7 +25,7 @@ func main() {
 		return
 	}
 
-	if err = c.Compile(); err != nil {
+	if err = c.Generate(); err != nil {
 		log.Fatalf("Compilation failure: %s", err)
 	}
 }
