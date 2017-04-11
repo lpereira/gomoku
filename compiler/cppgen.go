@@ -268,7 +268,8 @@ func (c *CppGen) toNilVal(t types.Type) (string, error) {
 			return "std::nullptr", nil
 
 		case *types.Slice, *types.Map, *types.Chan,
-			*types.Interface, *types.Named, *types.Array:
+			*types.Interface, *types.Named, *types.Array,
+			*types.Struct:
 
 			return "", nil
 		}
