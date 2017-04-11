@@ -32,6 +32,8 @@ type CppGen struct {
 	idents int
 
 	curVarType types.Type
+
+	symbolFilter *SymbolFilter
 }
 
 type VarStack struct {
@@ -580,6 +582,11 @@ func (c *CppGen) genNamespace(p *types.Package, mainBlock bool) (err error) {
 		if mainBlock && name == "main" {
 			name = "_main"
 		}
+
+		if c.symbolFilter.Generated(s, name) {
+			continue
+		}
+		c.symbolFilter.MarkGenerated(s, name)
 
 		switch t := obj.(type) {
 		case *types.Func:

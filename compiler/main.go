@@ -20,6 +20,29 @@ type Compiler struct {
 	program *loader.Program
 
 	outDir string
+
+	symbolFilter SymbolFilter
+}
+
+type SymbolFilter struct {
+	generated map[*types.Scope]map[string]struct{}
+}
+
+func NewSymbolFilter() SymbolFilter {
+	return SymbolFilter{generated: make(map[*types.Scope]map[string]struct{})}
+}
+
+func (sf *SymbolFilter) MarkGenerated(scope *types.Scope, symbol string) {
+	sf.generated[scope][symbol] = struct{}{}
+}
+
+func (sf *SymbolFilter) Generated(scope *types.Scope, symbol string) bool {
+	if s, ok := sf.generated[scope]; ok {
+		_, ok = s[symbol]
+		return ok
+	}
+	sf.generated[scope] = make(map[string]struct{})
+	return false
 }
 
 func New(args []string, outDir string) (*Compiler, error) {
@@ -32,6 +55,7 @@ func New(args []string, outDir string) (*Compiler, error) {
 			},
 			AllowErrors: false,
 		},
+		symbolFilter: NewSymbolFilter(),
 	}
 
 	_, err := compiler.conf.FromArgs(args[1:], false)
