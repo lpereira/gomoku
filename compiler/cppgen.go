@@ -725,6 +725,9 @@ func (c *CppGen) genExpr(x ast.Expr) (string, error) {
 	default:
 		return "", fmt.Errorf("Couldn't generate expression with type: %s", reflect.TypeOf(x))
 
+	case *ast.TypeAssertExpr:
+		return c.genTypeAssertExpr(x)
+
 	case *ast.KeyValueExpr:
 		return c.genKeyValueExpr(x)
 
@@ -989,6 +992,19 @@ func (c *CppGen) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
 	fmt.Fprint(gen.out, ")")
 
 	return nil
+}
+
+func (c *CppGen) genTypeAssertExpr(a *ast.TypeAssertExpr) (string, error) {
+	tp, err := c.genExpr(a.Type)
+	if err != nil {
+		return "", err
+	}
+	x, err := c.genExpr(a.X)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("moku::try_assert<%s>(%s)", tp, x), nil
 }
 
 func (c *CppGen) genSelectorExpr(s *ast.SelectorExpr) (string, error) {
