@@ -260,20 +260,21 @@ void _main() {
 
 # Usage
 
-The program is parsed from the standard input and written to the standard
-output:
+Pass the path to the program being built.  Paths relative to `$GOHOME`,
+relative, and absolute paths are accepted.  Output will be generated in
+`outdir/` under the current directory (this directory will be cleared
+every run):
 
-    gomoku < samples/interfaces/interfaces.go
+    gomoku ./samples/interfaces
 
-The generated code isn't indented, so it's recommended to pipe it through
-`clang-format`:
+This will generate a pair of `.cpp` and `.h` files for each imported
+package (and their dependencies).  Generated files are not indented
+(yet), so piping them through `clang-format` (or other indenting tool)
+is recommended.
 
-    gomoku < samples/interfaces/interfaces.go | clang-format
-
-To generate type system debugging information instead of C++ code, pass
-the -debugtype command line flag.  The output is very crude and only
-intended for those developing the compiler itself.
-
+It is posible that the compiler will abort midway through code
+generation since not all data types, statements, and expressions are
+implemented yet.
 
 # FAQ
 
