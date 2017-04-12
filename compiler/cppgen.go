@@ -562,8 +562,25 @@ func (c *CppGen) genConst(gen *nodeGen, k *types.Const, mainBlock bool) error {
 	return nil
 }
 
-func (c *CppGen) genNamespace(p *types.Package, mainBlock bool) (err error) {
-	if !mainBlock {
+func (c *CppGen) genNamespace(p *types.Package) (err error) {
+	s := p.Scope()
+
+	if c.symbolFilter.Once(s, "#pragma once") {
+		fmt.Fprintln(c.output, "#pragma once")
+	}
+
+	for _, imp := range p.Imports() {
+		include := fmt.Sprintf("#include \"%s.h\"", imp.Name())
+		if c.symbolFilter.Once(s, include) {
+			fmt.Fprintln(c.output, include)
+		}
+	}
+
+	if len(s.Names()) == 0 {
+		return nil
+	}
+
+	if c.symbolFilter.Once(s, "namespace "+p.Name()) {
 		fmt.Fprintf(c.output, "namespace %s {\n", p.Name())
 		defer fmt.Fprintf(c.output, "} // namespace %s\n", p.Name())
 	}
@@ -581,18 +598,16 @@ func (c *CppGen) genNamespace(p *types.Package, mainBlock bool) (err error) {
 		}
 	}
 
-	s := p.Scope()
 	for _, name := range s.Names() {
 		obj := s.Lookup(name)
 
-		if mainBlock && name == "main" {
-			name = "_main"
-		}
-
-		if c.symbolFilter.Generated(s, name) {
+		if !c.symbolFilter.Once(s, name) {
 			continue
 		}
-		c.symbolFilter.MarkGenerated(s, name)
+
+		if name == "main" {
+			name = "_main"
+		}
 
 		switch t := obj.(type) {
 		case *types.Func:
@@ -608,38 +623,16 @@ func (c *CppGen) genNamespace(p *types.Package, mainBlock bool) (err error) {
 			}
 		case *types.Var:
 			gen := nodeGen{out: c.output}
-			if err = c.genVar(&gen, t, mainBlock); err != nil {
+			if err = c.genVar(&gen, t, true); err != nil {
 				return err
 			}
 		case *types.Const:
 			gen := nodeGen{out: c.output}
-			if err = c.genConst(&gen, t, mainBlock); err != nil {
+			if err = c.genConst(&gen, t, true); err != nil {
 				return err
 			}
 		default:
 			return fmt.Errorf("Don't know how to generate: %s", reflect.TypeOf(t))
-		}
-	}
-
-	return nil
-}
-
-func (c *CppGen) genImports() (err error) {
-	var genImport func(p *types.Package) error
-
-	genImport = func(p *types.Package) error {
-		for _, pkg := range p.Imports() {
-			if err = genImport(pkg); err != nil {
-				return err
-			}
-		}
-		c.genNamespace(p, false)
-		return nil
-	}
-
-	for _, pkg := range c.pkg.Imports() {
-		if err = genImport(pkg); err != nil {
-			return err
 		}
 	}
 
@@ -1719,22 +1712,20 @@ func (c *CppGen) walk(gen *nodeGen, node ast.Node) error {
 	}
 }
 
-func (c *CppGen) Generate() (err error) {
-	if err = c.genImports(); err != nil {
-		return err
-	}
-	if err = c.genNamespace(c.pkg, true); err != nil {
-		return err
-	}
-	if err = c.genMain(); err != nil {
-		return err
-	}
+func (c *CppGen) GenerateHdr() (err error) {
+	return c.genNamespace(c.pkg)
+}
 
+func (c *CppGen) GenerateImpl() (err error) {
 	gen := nodeGen{out: c.output}
 	for _, decl := range c.ast.Decls {
-		if err = c.walk(&gen, ast.Node(decl)); err != nil {
+		if err := c.walk(&gen, ast.Node(decl)); err != nil {
 			return err
 		}
+	}
+
+	if err = c.genMain(); err != nil {
+		return err
 	}
 
 	return nil

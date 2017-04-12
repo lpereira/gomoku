@@ -33,17 +33,17 @@ func NewSymbolFilter() SymbolFilter {
 	return SymbolFilter{generated: make(map[*types.Scope]map[string]struct{})}
 }
 
-func (sf *SymbolFilter) MarkGenerated(scope *types.Scope, symbol string) {
-	sf.generated[scope][symbol] = struct{}{}
-}
-
-func (sf *SymbolFilter) Generated(scope *types.Scope, symbol string) bool {
+func (sf *SymbolFilter) Once(scope *types.Scope, symbol string) bool {
 	if s, ok := sf.generated[scope]; ok {
-		_, ok = s[symbol]
-		return ok
+		if _, ok = s[symbol]; ok {
+			return false
+		}
+	} else {
+		sf.generated[scope] = make(map[string]struct{})
 	}
-	sf.generated[scope] = make(map[string]struct{})
-	return false
+
+	sf.generated[scope][symbol] = struct{}{}
+	return true
 }
 
 func New(args []string, outDir string) (*Compiler, error) {
