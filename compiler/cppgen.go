@@ -361,7 +361,7 @@ func (c *CppGen) genInterface(name string, iface *types.Interface) (err error) {
 
 func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error) (err error) {
 	// FIXME: this is highly inneficient and won't scale at all
-	var ifaces []string
+	ifaces := make(map[string]struct{})
 	ifaceMeths := make(map[string]struct{})
 	for k, v := range c.inf.Types {
 		if _, ok := k.(*ast.InterfaceType); !ok {
@@ -387,13 +387,17 @@ func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error
 				}
 
 				derived := fmt.Sprintf("public %s", def.Name())
-				ifaces = append(ifaces, derived)
+				ifaces[derived] = struct{}{}
 				break
 			}
 		}
 	}
 
-	if err = out(ifaces); err != nil {
+	uniqIfaces := make([]string, 0, len(ifaces))
+	for k := range ifaces {
+		uniqIfaces = append(uniqIfaces, k)
+	}
+	if err = out(uniqIfaces); err != nil {
 		return err
 	}
 
