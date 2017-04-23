@@ -532,12 +532,16 @@ func (c *CppGen) genVar(gen *nodeGen, v *types.Var, mainBlock bool) error {
 		return fmt.Errorf("Couldn't get nil value for variable: %s", err)
 	}
 
-	if mainBlock {
+	switch {
+	case mainBlock:
 		if !v.Exported() {
 			fmt.Fprint(gen.out, "static ")
 		}
 		fmt.Fprintf(gen.out, "%s %s;\n", typ, v.Name())
-	} else {
+	case gen.escapees[v]:
+		println(v, "escapes")
+		fmt.Fprintf(gen.out, "%s %s{%s}; /* escapes */\n", typ, v.Name(), nilVal)
+	default:
 		fmt.Fprintf(gen.out, "%s %s{%s};\n", typ, v.Name(), nilVal)
 	}
 
@@ -831,6 +835,8 @@ type nodeGen struct {
 	// SwitchStmt generation
 	labels         []string
 	curLbl, defLbl int
+
+	escapees map[*types.Var]bool
 }
 
 func (c *CppGen) genComment(gen *nodeGen, comment *ast.Comment) error {
@@ -1112,12 +1118,21 @@ func (c *CppGen) genScopeAndBody(gen *nodeGen, block *ast.BlockStmt, scope ast.N
 		defer fmt.Fprintln(gen.out, "}")
 	}
 
+	var escapees map[*types.Var]bool
+	if block != nil {
+		escapees = escapingObjects(scope, &c.inf)
+	}
+
 	blockGen := nodeGen{out: new(bytes.Buffer)}
 	if err = c.genBlockStmt(&blockGen, block); err != nil {
 		return err
 	}
 
-	varGen := nodeGen{out: new(bytes.Buffer), hasDefer: blockGen.hasDefer}
+	varGen := nodeGen{
+		out:      new(bytes.Buffer),
+		hasDefer: blockGen.hasDefer,
+		escapees: escapees,
+	}
 	if err = c.genScopeVars(&varGen, scope, filter); err != nil {
 		return err
 	}
