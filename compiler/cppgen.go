@@ -32,6 +32,7 @@ type CppGen struct {
 	idents int
 
 	curVarType types.Type
+	isTieAssign bool
 
 	symbolFilter *SymbolFilter
 }
@@ -724,10 +725,31 @@ func (c *CppGen) genKeyValueExpr(kv *ast.KeyValueExpr) (string, error) {
 	}
 }
 
+func (c *CppGen) genTypeAssertExpr(ta *ast.TypeAssertExpr) (string, error) {
+	expr, err := c.genExpr(ta.X)
+	if err != nil {
+		return "", err
+	}
+
+	typ, err := c.genExpr(ta.Type)
+	if err != nil {
+		return "", err
+	}
+
+	if c.isTieAssign {
+		return fmt.Sprintf("moku::try_type_assert<%s>(%s)", typ, expr), nil
+	}
+
+	return fmt.Sprintf("moku::type_assert<%s>(%s)", typ, expr), nil
+}
+
 func (c *CppGen) genExpr(x ast.Expr) (string, error) {
 	switch x := x.(type) {
 	default:
 		return "", fmt.Errorf("Couldn't generate expression with type: %s", reflect.TypeOf(x))
+
+	case *ast.TypeAssertExpr:
+		return c.genTypeAssertExpr(x)
 
 	case *ast.KeyValueExpr:
 		return c.genKeyValueExpr(x)
@@ -927,8 +949,10 @@ func (c *CppGen) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
 
 	if len(vars) == 1 {
 		fmt.Fprint(gen.out, vars[0])
+		c.isTieAssign = false
 	} else {
 		fmt.Fprintf(gen.out, "std::tie(%s)", strings.Join(vars, ", "))
+		c.isTieAssign = true
 	}
 
 	var tupleOk bool
