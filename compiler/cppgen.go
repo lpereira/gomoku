@@ -435,7 +435,7 @@ func (c *CppGen) genStruct(name string, s *types.Struct, n *types.Named) (err er
 	defer fmt.Fprintf(c.output, "};\n")
 
 	return c.genIfaceForType(n, func(ifaces []string) error {
-		if ifaces != nil {
+		if ifaces != nil && len(ifaces) > 0 {
 			fmt.Fprintf(c.output, " : %s", strings.Join(ifaces, ", "))
 		}
 
