@@ -407,11 +407,31 @@ func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error
 		sig := f.Type().(*types.Signature)
 
 		err = c.genFuncProto(f.Name(), sig, func(name, retType, params string) error {
-			if _, virtual := ifaceMeths[f.Name()]; virtual {
-				fmt.Fprintf(c.output, "virtual %s %s(%s) override;\n", retType, name, params)
-			} else {
+			_, isPtrRecv := sig.Recv().Type().(*types.Pointer)
+			_, isVirtual := ifaceMeths[f.Name()]
+
+			if isVirtual {
+				if isPtrRecv {
+					fmt.Fprintf(c.output, "virtual %s %s(%s) override;\n", retType, name, params)
+				} else {
+					fmt.Fprintf(c.output, "inline virtual %s %s(%s) override {\n", retType, name, params)
+				}
+			} else if isPtrRecv {
 				fmt.Fprintf(c.output, "%s %s(%s);\n", retType, name, params)
+			} else {
+				fmt.Fprintf(c.output, "inline %s %s(%s) {\n", retType, name, params)
 			}
+
+			if !isPtrRecv {
+				fmt.Fprintf(c.output, "%s _copy_ = *this;\n", n.Obj().Name())
+				if retType != "void" {
+					fmt.Fprintf(c.output, "return ");
+				}
+				fmt.Fprintf(c.output, "_copy_._%sByValue(%s);\n}\n", name, params)
+
+				fmt.Fprintf(c.output, "%s _%sByValue(%s);\n", retType, name, params)
+			}
+
 			return nil
 		})
 		if err != nil {
@@ -879,6 +899,7 @@ func (c *CppGen) genFuncDecl(gen *nodeGen, f *ast.FuncDecl) (err error) {
 			switch t := recv.Type().(type) {
 			case *types.Named:
 				typ = t.Obj().Name()
+				name = fmt.Sprintf("_%sByValue", name)
 			case *types.Pointer:
 				if typ, err = c.toTypeSig(t.Elem()); err != nil {
 					return err
@@ -886,6 +907,7 @@ func (c *CppGen) genFuncDecl(gen *nodeGen, f *ast.FuncDecl) (err error) {
 			}
 			name = fmt.Sprintf("%s::%s", typ, name)
 		}
+
 		fmt.Fprintf(gen.out, "%s %s(%s)\n", retType, name, params)
 		return nil
 	})
