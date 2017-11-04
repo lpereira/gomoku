@@ -402,28 +402,20 @@ func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error
 		return err
 	}
 
-	mset := types.NewMethodSet(n)
-	for i := 0; i < mset.Len(); i++ {
-		sel := mset.At(i)
-		switch sel.Kind() {
-		default:
-			return fmt.Errorf("Kind %d not supported here", sel.Kind())
+	for i := 0; i < n.NumMethods(); i++ {
+		f := n.Method(i)
+		sig := f.Type().(*types.Signature)
 
-		case types.MethodVal:
-			f := sel.Obj().(*types.Func)
-			sig := f.Type().(*types.Signature)
-
-			err = c.genFuncProto(f.Name(), sig, func(name, retType, params string) error {
-				if _, virtual := ifaceMeths[f.Name()]; virtual {
-					fmt.Fprintf(c.output, "virtual %s %s(%s) override;\n", retType, name, params)
-				} else {
-					fmt.Fprintf(c.output, "%s %s(%s);\n", retType, name, params)
-				}
-				return nil
-			})
-			if err != nil {
-				return err
+		err = c.genFuncProto(f.Name(), sig, func(name, retType, params string) error {
+			if _, virtual := ifaceMeths[f.Name()]; virtual {
+				fmt.Fprintf(c.output, "virtual %s %s(%s) override;\n", retType, name, params)
+			} else {
+				fmt.Fprintf(c.output, "%s %s(%s);\n", retType, name, params)
 			}
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 	}
 
