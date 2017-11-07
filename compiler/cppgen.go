@@ -360,7 +360,7 @@ func (c *CppGen) genInterface(name string, iface *types.Interface) (err error) {
 	return err
 }
 
-func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error) (err error) {
+func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error) ([]string, error) {
 	// FIXME: this is highly inneficient and won't scale at all
 	ifaces := make(map[string]struct{})
 	ifaceMeths := make(map[string]struct{})
@@ -387,8 +387,7 @@ func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error
 					ifaceMeths[iface.Method(i).Name()] = struct{}{}
 				}
 
-				derived := fmt.Sprintf("public %s", def.Name())
-				ifaces[derived] = struct{}{}
+				ifaces[def.Name()] = struct{}{}
 				break
 			}
 		}
@@ -398,15 +397,15 @@ func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error
 	for k := range ifaces {
 		uniqIfaces = append(uniqIfaces, k)
 	}
-	if err = out(uniqIfaces); err != nil {
-		return err
+	if err := out(uniqIfaces); err != nil {
+		return nil, err
 	}
 
 	for i := 0; i < n.NumMethods(); i++ {
 		f := n.Method(i)
 		sig := f.Type().(*types.Signature)
 
-		err = c.genFuncProto(f.Name(), sig, func(name, retType, params string) error {
+		err := c.genFuncProto(f.Name(), sig, func(name, retType, params string) error {
 			_, isPtrRecv := sig.Recv().Type().(*types.Pointer)
 			_, isVirtual := ifaceMeths[f.Name()]
 
@@ -425,7 +424,7 @@ func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error
 			if !isPtrRecv {
 				fmt.Fprintf(c.output, "%s _copy_ = *this;\n", n.Obj().Name())
 				if retType != "void" {
-					fmt.Fprintf(c.output, "return ");
+					fmt.Fprintf(c.output, "return ")
 				}
 				fmt.Fprintf(c.output, "_copy_._%sByValue(%s);\n}\n", name, params)
 
@@ -435,20 +434,35 @@ func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error
 			return nil
 		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	return uniqIfaces, nil
+}
+
+func (c *CppGen) genTryAssert(ifaces []string, name string) {
+	if ifaces != nil && len(ifaces) > 0 {
+		fmt.Fprintf(c.output, "template <> %s *_try_assert_(const moku::interface &_iface_) {\n", name)
+		for _, iface := range ifaces {
+			fmt.Fprintf(c.output, "if (%s *asserted = moku::type_registry::try_assert<%s>(_iface_)) return asserted;\n", iface, iface)
+		}
+		fmt.Fprintf(c.output, "return std::nullptr;")
+		fmt.Fprintf(c.output, "}\n")
+	}
 }
 
 func (c *CppGen) genStruct(name string, s *types.Struct, n *types.Named) (err error) {
 	fmt.Fprintf(c.output, "struct %s", name)
-	defer fmt.Fprintf(c.output, "};\n")
 
-	return c.genIfaceForType(n, func(ifaces []string) error {
+	ifaces, err := c.genIfaceForType(n, func(ifaces []string) error {
 		if ifaces != nil && len(ifaces) > 0 {
-			fmt.Fprintf(c.output, " : %s", strings.Join(ifaces, ", "))
+			public := make([]string, 0)
+			for _, iface := range ifaces {
+				public = append(public, fmt.Sprintf("public %s", iface))
+			}
+
+			fmt.Fprintf(c.output, " : %s", strings.Join(public, ", "))
 		}
 
 		fmt.Fprint(c.output, " {\n")
@@ -479,15 +493,24 @@ func (c *CppGen) genStruct(name string, s *types.Struct, n *types.Named) (err er
 		}
 
 		fmt.Fprintf(c.output, "bool _isNil_() const { return %s; }", strings.Join(nilCmp, " && "))
+
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(c.output, "};\n")
+
+	c.genTryAssert(ifaces, name)
+
+	return nil
 }
 
 func (c *CppGen) genBasicType(name string, b *types.Basic, n *types.Named) (err error) {
-	fmt.Fprintf(c.output, "struct %s", name)
-	defer fmt.Fprintf(c.output, "};\n")
+	_, err = c.genIfaceForType(n, func(ifaces []string) error {
+		fmt.Fprintf(c.output, "struct %s", name)
 
-	return c.genIfaceForType(n, func(ifaces []string) error {
 		typ, err := c.toTypeSig(b.Underlying())
 		if err != nil {
 			return fmt.Errorf("Could not determine underlying type: %s", err)
@@ -498,17 +521,23 @@ func (c *CppGen) genBasicType(name string, b *types.Basic, n *types.Named) (err 
 			return fmt.Errorf("Could not determine nil value for type %s: %s", typ, err)
 		}
 
-		base := []string{fmt.Sprintf("moku::basic<%s>", typ)}
+		base := []string{fmt.Sprintf("public moku::basic<%s>", typ)}
 		for _, iface := range ifaces {
-			base = append(base, iface)
+			base = append(base, fmt.Sprintf("public %s", iface))
 		}
 
 		fmt.Fprintf(c.output, ": %s {\n", strings.Join(base, ", "))
 		fmt.Fprintf(c.output, "%s() : moku::basic<%s>{%s} {}\n", name, typ, nilValue)
 		fmt.Fprintf(c.output, "bool _isNil_() const { return %s(this) == %s; }", typ, nilValue)
 
+		fmt.Fprintf(c.output, "};\n")
+
+		c.genTryAssert(ifaces, name)
+
 		return nil
 	})
+
+	return err
 }
 
 func (c *CppGen) genNamedType(name string, n *types.Named) (err error) {
