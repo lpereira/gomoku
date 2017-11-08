@@ -443,7 +443,7 @@ func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error
 
 func (c *CppGen) genTryAssert(ifaces []string, name string) {
 	if ifaces != nil && len(ifaces) > 0 {
-		fmt.Fprintf(c.output, "template <> %s *_try_assert_(const moku::interface &_iface_) {\n", name)
+		fmt.Fprintf(c.output, "template <> %s *moku::try_assert(const moku::interface &_iface_) {\n", name)
 		for _, iface := range ifaces {
 			fmt.Fprintf(c.output, "if (%s *asserted = moku::type_registry::try_assert<%s>(_iface_)) return asserted;\n", iface, iface)
 		}
