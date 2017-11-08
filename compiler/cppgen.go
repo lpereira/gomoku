@@ -460,11 +460,12 @@ func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error
 			}
 
 			if !isPtrRecv {
-				fmt.Fprintf(c.output, "%s _copy_ = *this;\n", n.Obj().Name())
+				copied := strings.ToLower(n.Obj().Name())
+				fmt.Fprintf(c.output, "%s %s = *this;\n", n.Obj().Name(), copied)
 				if retType != "void" {
 					fmt.Fprintf(c.output, "return ")
 				}
-				fmt.Fprintf(c.output, "_copy_._%sByValue(%s);\n}\n", name, params)
+				fmt.Fprintf(c.output, "%s._%sByValue(%s);\n}\n", copied, name, params)
 
 				fmt.Fprintf(c.output, "%s _%sByValue(%s);\n", retType, name, params)
 			}
@@ -481,9 +482,10 @@ func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error
 
 func (c *CppGen) genTryAssert(ifaces []string, name string) {
 	if ifaces != nil && len(ifaces) > 0 {
-		fmt.Fprintf(c.output, "template <> %s *moku::try_assert(const moku::interface &_iface_) {\n", name)
+		fmt.Fprintf(c.output, "template <> %s *moku::try_assert(const moku::interface &iface) {\n", name)
 		for _, iface := range ifaces {
-			fmt.Fprintf(c.output, "if (%s *asserted = moku::type_registry::try_assert<%s>(_iface_)) return asserted;\n", iface, iface)
+			asserted := strings.ToLower(iface)
+			fmt.Fprintf(c.output, "if (%s *%s = moku::type_registry::try_assert<%s>(iface)) return %s;\n", iface, asserted, iface, asserted)
 		}
 		fmt.Fprintf(c.output, "return std::nullptr;")
 		fmt.Fprintf(c.output, "}\n")
