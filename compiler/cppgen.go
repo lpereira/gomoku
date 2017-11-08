@@ -31,16 +31,25 @@ type CppGen struct {
 
 	idents int
 
-	curVarType types.Type
+	curVarType  types.Type
 	isTieAssign bool
 
 	symbolFilter *SymbolFilter
+
+	typeAssertFuncGenerated map[string]struct{}
 }
 
 type VarStack struct {
 	vars  []*types.Var
 	count int
 }
+
+type IfaceFilter int
+
+const (
+	ConcreteType IfaceFilter = iota
+	IfaceType
+)
 
 func (s *VarStack) Push(v *types.Var) {
 	s.vars = append(s.vars[:s.count], v)
@@ -340,8 +349,8 @@ func (c *CppGen) genFuncProto(name string, sig *types.Signature, out func(name, 
 	return out(name, retType, strings.Join(params, ", "))
 }
 
-func (c *CppGen) genInterface(name string, iface *types.Interface) (err error) {
-	fmt.Fprintf(c.output, "struct %s {\n", name)
+func (c *CppGen) genInterface(name string, iface *types.Interface, n *types.Named) (err error) {
+	fmt.Fprintf(c.output, "\nstruct %s {\n", name)
 
 	for m := iface.NumMethods(); m > 0; m-- {
 		meth := iface.Method(m - 1)
@@ -357,13 +366,27 @@ func (c *CppGen) genInterface(name string, iface *types.Interface) (err error) {
 	}
 
 	fmt.Fprintf(c.output, "};\n")
+
+	concreteTypes, _ := c.getIfacesForType(n, ConcreteType)
+	for _, typ := range concreteTypes {
+		if _, ok := c.typeAssertFuncGenerated[typ]; ok {
+			continue
+		}
+
+		c.typeAssertFuncGenerated[typ] = struct{}{}
+
+		fmt.Fprintf(c.output, "template <> inline %s *moku::try_assert(const moku::interface &iface) {\n", typ)
+		fmt.Fprintf(c.output, "return moku::type_registry::type_assert<%s>(iface);", typ)
+		fmt.Fprintf(c.output, "}\n")
+	}
+
 	return err
 }
 
-func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error) ([]string, error) {
+func (c *CppGen) getIfacesForType(n *types.Named, filter IfaceFilter) (uniqIfaces []string, ifaceMeths map[string]struct{}) {
 	// FIXME: this is highly inneficient and won't scale at all
 	ifaces := make(map[string]struct{})
-	ifaceMeths := make(map[string]struct{})
+	ifaceMeths = make(map[string]struct{})
 	for k, v := range c.inf.Types {
 		if _, ok := k.(*ast.InterfaceType); !ok {
 			continue
@@ -376,9 +399,17 @@ func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error
 
 		for _, typ := range c.inf.Defs {
 			if def, ok := typ.(*types.TypeName); ok {
-				if !types.IsInterface(def.Type()) {
-					continue
+				switch filter {
+				case ConcreteType:
+					if types.IsInterface(def.Type()) {
+						continue
+					}
+				case IfaceType:
+					if !types.IsInterface(def.Type()) {
+						continue
+					}
 				}
+
 				if !types.Implements(def.Type(), iface) {
 					continue
 				}
@@ -393,10 +424,17 @@ func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error
 		}
 	}
 
-	uniqIfaces := make([]string, 0, len(ifaces))
+	uniqIfaces = make([]string, 0, len(ifaces))
 	for k := range ifaces {
 		uniqIfaces = append(uniqIfaces, k)
 	}
+
+	return uniqIfaces, ifaceMeths
+}
+
+func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error) ([]string, error) {
+
+	uniqIfaces, ifaceMeths := c.getIfacesForType(n, IfaceType)
 	if err := out(uniqIfaces); err != nil {
 		return nil, err
 	}
@@ -546,7 +584,7 @@ func (c *CppGen) genNamedType(name string, n *types.Named) (err error) {
 		return fmt.Errorf("What to do with the named type %v?", reflect.TypeOf(t))
 
 	case *types.Interface:
-		return c.genInterface(name, t)
+		return c.genInterface(name, t, n)
 
 	case *types.Struct:
 		return c.genStruct(name, t, n)

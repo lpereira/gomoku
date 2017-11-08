@@ -80,12 +80,13 @@ func (c *Compiler) genFile(name string, pkg *loader.PackageInfo, ast *ast.File, 
 	defer f.Close()
 
 	gen := CppGen{
-		fset:         c.program.Fset,
-		ast:          ast,
-		pkg:          pkg.Pkg,
-		inf:          pkg.Info,
-		output:       f,
-		symbolFilter: &c.symbolFilter,
+		fset:                    c.program.Fset,
+		ast:                     ast,
+		pkg:                     pkg.Pkg,
+		inf:                     pkg.Info,
+		output:                  f,
+		symbolFilter:            &c.symbolFilter,
+		typeAssertFuncGenerated: make(map[string]struct{}),
 	}
 
 	if err := out(&gen); err != nil {
