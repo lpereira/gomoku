@@ -493,7 +493,7 @@ func (c *CppGen) genTryAssert(ifaces []string, name string) {
 }
 
 func (c *CppGen) genStruct(name string, s *types.Struct, n *types.Named) (err error) {
-	fmt.Fprintf(c.output, "struct %s", name)
+	fmt.Fprintf(c.output, "\nstruct %s", name)
 
 	ifaces, err := c.genIfaceForType(n, func(ifaces []string) error {
 		if ifaces != nil && len(ifaces) > 0 {
@@ -549,7 +549,7 @@ func (c *CppGen) genStruct(name string, s *types.Struct, n *types.Named) (err er
 
 func (c *CppGen) genBasicType(name string, b *types.Basic, n *types.Named) (err error) {
 	_, err = c.genIfaceForType(n, func(ifaces []string) error {
-		fmt.Fprintf(c.output, "struct %s", name)
+		fmt.Fprintf(c.output, "\nstruct %s", name)
 
 		typ, err := c.toTypeSig(b.Underlying())
 		if err != nil {
@@ -668,7 +668,7 @@ func (c *CppGen) genNamespace(p *types.Package) (err error) {
 
 	if c.symbolFilter.Once(s, "namespace "+p.Name()) {
 		fmt.Fprintf(c.output, "namespace %s {\n", p.Name())
-		defer fmt.Fprintf(c.output, "} // namespace %s\n", p.Name())
+		defer fmt.Fprintf(c.output, "} // namespace %s\n\n", p.Name())
 	}
 
 	genTypeProto := func(name string, obj types.Object) error {
