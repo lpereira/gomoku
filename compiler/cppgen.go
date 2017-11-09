@@ -730,14 +730,34 @@ func (c *CppGen) genMapType(m *ast.MapType) (string, error) {
 }
 
 func (c *CppGen) genCallExpr(ce *ast.CallExpr) (string, error) {
+	sig, hasSig := c.inf.Types[ce.Fun].Type.(*types.Signature)
+
 	fun, err := c.genExpr(ce.Fun)
 	if err != nil {
 		return "", err
 	}
 
 	var args []string
-	for _, arg := range ce.Args {
-		argExp, err := c.genExpr(arg)
+	for i, arg := range ce.Args {
+		var argExp string
+
+		if hasSig {
+			typ := sig.Params().At(i).Type()
+
+			if iface, isIface := typ.Underlying().(*types.Interface); isIface && iface.Empty() {
+				typeSig, err := c.toTypeSig(c.inf.Types[arg].Type)
+				if err != nil {
+					return "", err
+				}
+
+				argExp = fmt.Sprintf("moku::make_iface<%s>(%s)", typeSig, arg)
+			} else {
+				argExp, err = c.genExpr(arg)
+			}
+		} else {
+			argExp, err = c.genExpr(arg)
+		}
+
 		if err != nil {
 			return "", err
 		}
