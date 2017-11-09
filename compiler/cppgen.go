@@ -137,141 +137,132 @@ func (c *CppGen) newIdent() (ret string) {
 }
 
 func (c *CppGen) toTypeSig(t types.Type) (string, error) {
-	f := func(t types.Type) (string, error) {
-		switch typ := t.(type) {
-		default:
-			return "", fmt.Errorf("Unknown type: %s", reflect.TypeOf(typ))
+	switch typ := t.(type) {
+	default:
+		return "", fmt.Errorf("Unknown type: %s", reflect.TypeOf(typ))
 
-		case *types.Chan:
-			elemTyp, err := c.toTypeSig(typ.Elem())
-			if err != nil {
-				return "", nil
-			}
-
-			var dirMod string
-			switch typ.Dir() {
-			case types.SendRecv:
-				dirMod = "true, true"
-			case types.SendOnly:
-				dirMod = "true, false"
-			case types.RecvOnly:
-				dirMod = "false, true"
-			}
-
-			return fmt.Sprintf("moku::channel<%s, %s>", elemTyp, dirMod), nil
-
-		case *types.Map:
-			k, err := c.toTypeSig(typ.Key())
-			if err != nil {
-				return "", err
-			}
-
-			v, err := c.toTypeSig(typ.Elem())
-			if err != nil {
-				return "", err
-			}
-
-			return fmt.Sprintf("std::map<%s, %s>", k, v), nil
-
-		case *types.Slice:
-			s, err := c.toTypeSig(typ.Elem())
-			if err != nil {
-				return "", err
-			}
-
-			return fmt.Sprintf("moku::slice<%s>", s), nil
-
-		case *types.Array:
-			s, err := c.toTypeSig(typ.Elem())
-			if err != nil {
-				return "", err
-			}
-
-			return fmt.Sprintf("std::vector<%s>", s), nil
-
-		case *types.Pointer:
-			s, err := c.toTypeSig(typ.Elem())
-			if err != nil {
-				return "", err
-			}
-
-			return fmt.Sprintf("%s*", s), nil
-
-		case *types.Interface:
-			if typ.Empty() {
-				return "moku::empty_interface", nil
-			}
-
-			return c.toTypeSig(typ.Underlying())
-
-		case *types.Named:
-			switch typ.Obj().Name() {
-			case "error":
-				return "moku::error", nil
-			default:
-				return typ.Obj().Name(), nil
-			}
-
-		case *types.Basic:
-			if v, ok := basicTypeToCpp[typ.Kind()]; ok {
-				return v.typ, nil
-			}
-
-			return "", fmt.Errorf("Unsupported basic type: %s", typ)
-
-		case *types.Tuple:
-			var r []string
-
-			items := typ.Len()
-			for i := 0; i < items; i++ {
-				s, err := c.toTypeSig(typ.At(i).Type())
-				if err != nil {
-					return "", err
-				}
-
-				r = append(r, s)
-			}
-
-			return strings.Join(r, ", "), nil
-
-		case *types.Signature:
-			var retType []string
-			if r := typ.Results(); r != nil {
-				s, err := c.toTypeSig(r)
-				if err != nil {
-					return "", err
-				}
-				retType = append(retType, s)
-			} else {
-				retType = append(retType, "void")
-			}
-
-			var paramTypes []string
-			if p := typ.Params(); p != nil {
-				s, err := c.toTypeSig(p)
-				if err != nil {
-					return "", err
-				}
-				paramTypes = append(paramTypes, s)
-			}
-
-			p := strings.Join(paramTypes, ", ")
-			if len(retType) == 1 {
-				r := retType[0]
-				return fmt.Sprintf("std::function<%s(%s)>", r, p), nil
-			}
-
-			r := strings.Join(retType, ", ")
-			return fmt.Sprintf("std::function<std::tuple<%s>(%s)>", r, p), nil
+	case *types.Chan:
+		elemTyp, err := c.toTypeSig(typ.Elem())
+		if err != nil {
+			return "", nil
 		}
-	}
 
-	sig, err := f(t)
-	if err != nil {
-		return sig, err
-	}
+		var dirMod string
+		switch typ.Dir() {
+		case types.SendRecv:
+			dirMod = "true, true"
+		case types.SendOnly:
+			dirMod = "true, false"
+		case types.RecvOnly:
+			dirMod = "false, true"
+		}
 
-	return sig, nil
+		return fmt.Sprintf("moku::channel<%s, %s>", elemTyp, dirMod), nil
+
+	case *types.Map:
+		k, err := c.toTypeSig(typ.Key())
+		if err != nil {
+			return "", err
+		}
+
+		v, err := c.toTypeSig(typ.Elem())
+		if err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf("std::map<%s, %s>", k, v), nil
+
+	case *types.Slice:
+		s, err := c.toTypeSig(typ.Elem())
+		if err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf("moku::slice<%s>", s), nil
+
+	case *types.Array:
+		s, err := c.toTypeSig(typ.Elem())
+		if err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf("std::vector<%s>", s), nil
+
+	case *types.Pointer:
+		s, err := c.toTypeSig(typ.Elem())
+		if err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf("%s*", s), nil
+
+	case *types.Interface:
+		if typ.Empty() {
+			return "moku::interface", nil
+		}
+
+		return c.toTypeSig(typ.Underlying())
+
+	case *types.Named:
+		switch typ.Obj().Name() {
+		case "error":
+			return "moku::error", nil
+		default:
+			return typ.Obj().Name(), nil
+		}
+
+	case *types.Basic:
+		if v, ok := basicTypeToCpp[typ.Kind()]; ok {
+			return v.typ, nil
+		}
+
+		return "", fmt.Errorf("Unsupported basic type: %s", typ)
+
+	case *types.Tuple:
+		var r []string
+
+		items := typ.Len()
+		for i := 0; i < items; i++ {
+			s, err := c.toTypeSig(typ.At(i).Type())
+			if err != nil {
+				return "", err
+			}
+
+			r = append(r, s)
+		}
+
+		return strings.Join(r, ", "), nil
+
+	case *types.Signature:
+		var retType []string
+		if r := typ.Results(); r != nil {
+			s, err := c.toTypeSig(r)
+			if err != nil {
+				return "", err
+			}
+			retType = append(retType, s)
+		} else {
+			retType = append(retType, "void")
+		}
+
+		var paramTypes []string
+		if p := typ.Params(); p != nil {
+			s, err := c.toTypeSig(p)
+			if err != nil {
+				return "", err
+			}
+			paramTypes = append(paramTypes, s)
+		}
+
+		p := strings.Join(paramTypes, ", ")
+		if len(retType) == 1 {
+			r := retType[0]
+			return fmt.Sprintf("std::function<%s(%s)>", r, p), nil
+		}
+
+		r := strings.Join(retType, ", ")
+		return fmt.Sprintf("std::function<std::tuple<%s>(%s)>", r, p), nil
+	}
 }
 
 func (c *CppGen) toNilVal(t types.Type) (string, error) {
