@@ -829,7 +829,7 @@ func (c *CppGen) genTypeAssertExpr(ta *ast.TypeAssertExpr) (string, error) {
 	}
 
 	if c.isTieAssign {
-		return fmt.Sprintf("moku::try_type_assert<%s>(%s)", typ, expr), nil
+		return fmt.Sprintf("moku::try_assert<%s>(%s)", typ, expr), nil
 	}
 
 	return fmt.Sprintf("moku::type_assert<%s>(%s)", typ, expr), nil
