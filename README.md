@@ -383,7 +383,8 @@ this even remotely usable.  Here's a short list of tasks and things that
 need to be implemented; it's by no means complete, and some of these tasks
 are way more challenging than others:
 
-- [ ] Generating code for imports, not only type information
+- [x] Generating code for imports, not only type information
+- [ ] Review generation and call of package-level initialization (init func, global calls, etc)
 - [ ] Ensuring that all types implementing interfaces are assignable to the interface type
 - [ ] Fix the order of generated types
 - [ ] Reorganize the package in smaller files
