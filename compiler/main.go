@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/pkg/errors"
 	"golang.org/x/tools/go/loader"
 )
 
@@ -62,12 +63,12 @@ func NewCompiler(args []string, outDir string) (*Compiler, error) {
 
 	_, err := comp.conf.FromArgs(args[1:], false)
 	if err != nil {
-		return nil, fmt.Errorf("Could not create program loader: %s", err)
+		return nil, errors.Wrapf(err, "could not create program loader: %s", err)
 	}
 
 	comp.program, err = comp.conf.Load()
 	if err != nil {
-		return nil, fmt.Errorf("Could not load program: %s", err)
+		return nil, errors.Wrapf(err, "could not load program: %s", err)
 	}
 
 	return &comp, nil
@@ -148,11 +149,11 @@ func (c *Compiler) Compile() error {
 		}
 
 		if !pkg.Pkg.Complete() {
-			return fmt.Errorf("Package %s is not complete", pkg.Pkg.Name())
+			return fmt.Errorf("package %s is not complete", pkg.Pkg.Name())
 		}
 
 		if err := c.genPackage(pkg); err != nil {
-			return fmt.Errorf("Could not generate code for package %s: %s", pkg.Pkg.Name(), err)
+			return fmt.Errorf("could not generate code for package %s: %s", pkg.Pkg.Name(), err)
 		}
 	}
 
