@@ -86,7 +86,7 @@ func (c *Compiler) genFile(name string, pkg *loader.PackageInfo, ast *ast.File, 
 		pkg:                     pkg.Pkg,
 		inf:                     pkg.Info,
 		output:                  f,
-		symFilt:                 &c.symFilter,
+		symFilter:               &c.symFilter,
 		typeAssertFuncGenerated: make(map[string]struct{}),
 	})
 }
