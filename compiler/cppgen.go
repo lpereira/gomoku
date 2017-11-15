@@ -144,7 +144,7 @@ func (c *CppGen) toTypeSig(t types.Type) (string, error) {
 	case *types.Chan:
 		elemTyp, err := c.toTypeSig(typ.Elem())
 		if err != nil {
-			return "", nil
+			return "", err
 		}
 
 		var dirMod string
