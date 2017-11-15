@@ -9,31 +9,32 @@ import (
 	"go/ast"
 	"go/importer"
 	"go/types"
-	"golang.org/x/tools/go/loader"
 	"os"
 	"path/filepath"
+
+	"golang.org/x/tools/go/loader"
 )
 
 type Compiler struct {
-	gen *CppGen
+	gen *cppGen
 
 	conf    loader.Config
 	program *loader.Program
 
 	outDir string
 
-	symbolFilter SymbolFilter
+	symFilter symbolFilter
 }
 
-type SymbolFilter struct {
+type symbolFilter struct {
 	generated map[*types.Scope]map[string]struct{}
 }
 
-func NewSymbolFilter() SymbolFilter {
-	return SymbolFilter{generated: make(map[*types.Scope]map[string]struct{})}
+func newSymbolFilter() symbolFilter {
+	return symbolFilter{generated: make(map[*types.Scope]map[string]struct{})}
 }
 
-func (sf *SymbolFilter) Once(scope *types.Scope, symbol string) bool {
+func (sf *symbolFilter) once(scope *types.Scope, symbol string) bool {
 	if s, ok := sf.generated[scope]; ok {
 		if _, ok = s[symbol]; ok {
 			return false
@@ -46,8 +47,8 @@ func (sf *SymbolFilter) Once(scope *types.Scope, symbol string) bool {
 	return true
 }
 
-func New(args []string, outDir string) (*Compiler, error) {
-	compiler := Compiler{
+func NewCompiler(args []string, outDir string) (*Compiler, error) {
+	comp := Compiler{
 		outDir: outDir,
 		conf: loader.Config{
 			TypeChecker: types.Config{
@@ -56,49 +57,43 @@ func New(args []string, outDir string) (*Compiler, error) {
 			},
 			AllowErrors: false,
 		},
-		symbolFilter: NewSymbolFilter(),
+		symFilter: newSymbolFilter(),
 	}
 
-	_, err := compiler.conf.FromArgs(args[1:], false)
+	_, err := comp.conf.FromArgs(args[1:], false)
 	if err != nil {
 		return nil, fmt.Errorf("Could not create program loader: %s", err)
 	}
 
-	compiler.program, err = compiler.conf.Load()
+	comp.program, err = comp.conf.Load()
 	if err != nil {
 		return nil, fmt.Errorf("Could not load program: %s", err)
 	}
 
-	return &compiler, nil
+	return &comp, nil
 }
 
-func (c *Compiler) genFile(name string, pkg *loader.PackageInfo, ast *ast.File, out func(*CppGen) error) error {
+func (c *Compiler) genFile(name string, pkg *loader.PackageInfo, ast *ast.File, out func(*cppGen) error) error {
 	f, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	gen := CppGen{
+	return out(&cppGen{
 		fset:                    c.program.Fset,
 		ast:                     ast,
 		pkg:                     pkg.Pkg,
 		inf:                     pkg.Info,
 		output:                  f,
-		symbolFilter:            &c.symbolFilter,
+		symFilt:                 &c.symFilter,
 		typeAssertFuncGenerated: make(map[string]struct{}),
-	}
-
-	if err := out(&gen); err != nil {
-		return err
-	}
-
-	return nil
+	})
 }
 
 func (c *Compiler) genPackage(pkg *loader.PackageInfo) error {
-	genImpl := func(gen *CppGen) error { return gen.GenerateImpl() }
-	genHdr := func(gen *CppGen) error { return gen.GenerateHdr() }
+	genImpl := func(gen *cppGen) error { return gen.GenerateImpl() }
+	genHdr := func(gen *cppGen) error { return gen.GenerateHdr() }
 
 	for _, ast := range pkg.Files {
 		name := fmt.Sprintf("%s.cpp", ast.Name.Name)

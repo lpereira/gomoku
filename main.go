@@ -5,13 +5,14 @@
 package main
 
 import (
-	"github.com/lpereira/gomoku/compiler"
 	"log"
 	"os"
+
+	"github.com/lpereira/gomoku/compiler"
 )
 
 func main() {
-	c, err := compiler.New(os.Args, "outdir/")
+	c, err := compiler.NewCompiler(os.Args, "outdir/")
 	if err != nil {
 		log.Fatalf("Could not create compiler: %s", err)
 	}

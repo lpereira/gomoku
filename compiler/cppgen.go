@@ -15,7 +15,7 @@ import (
 	"strings"
 )
 
-type CppGen struct {
+type cppGen struct {
 	fset *token.FileSet
 	ast  *ast.File
 
@@ -27,36 +27,36 @@ type CppGen struct {
 	input  io.Reader
 	output io.Writer
 
-	recvs VarStack
+	recvs varStack
 
 	idents int
 
 	curVarType  types.Type
 	isTieAssign bool
 
-	symbolFilter *SymbolFilter
+	symFilter *symbolFilter
 
 	typeAssertFuncGenerated map[string]struct{}
 }
 
-type VarStack struct {
+type varStack struct {
 	vars  []*types.Var
 	count int
 }
 
-type IfaceFilter int
+type ifaceFilter int
 
 const (
-	ConcreteType IfaceFilter = iota
-	IfaceType
+	concreteType ifaceFilter = iota
+	ifaceType
 )
 
-func (s *VarStack) Push(v *types.Var) {
+func (s *varStack) Push(v *types.Var) {
 	s.vars = append(s.vars[:s.count], v)
 	s.count++
 }
 
-func (s *VarStack) Pop() *types.Var {
+func (s *varStack) Pop() *types.Var {
 	if s.count == 0 {
 		return nil
 	}
@@ -64,9 +64,9 @@ func (s *VarStack) Pop() *types.Var {
 	return s.vars[s.count]
 }
 
-func (s *VarStack) Curr() *types.Var { return s.vars[s.count-1] }
+func (s *varStack) Curr() *types.Var { return s.vars[s.count-1] }
 
-func (s *VarStack) Lookup(name string) *types.Var {
+func (s *varStack) Lookup(name string) *types.Var {
 	for cur := s.count - 1; cur >= 0; cur-- {
 		if v := s.vars[cur]; v != nil && name == v.Name() {
 			return v
@@ -130,13 +130,13 @@ func init() {
 	}
 }
 
-func (c *CppGen) newIdent() (ret string) {
+func (c *cppGen) newIdent() (ret string) {
 	ret = fmt.Sprintf("_ident_%d_", c.idents)
 	c.idents++
 	return
 }
 
-func (c *CppGen) toTypeSig(t types.Type) (string, error) {
+func (c *cppGen) toTypeSig(t types.Type) (string, error) {
 	switch typ := t.(type) {
 	default:
 		return "", fmt.Errorf("Unknown type: %s", reflect.TypeOf(typ))
@@ -265,7 +265,7 @@ func (c *CppGen) toTypeSig(t types.Type) (string, error) {
 	}
 }
 
-func (c *CppGen) toNilVal(t types.Type) (string, error) {
+func (c *cppGen) toNilVal(t types.Type) (string, error) {
 	f := func(t types.Type) (string, error) {
 		switch typ := t.(type) {
 		case *types.Basic:
@@ -298,7 +298,7 @@ func (c *CppGen) toNilVal(t types.Type) (string, error) {
 	return nilVal, err
 }
 
-func (c *CppGen) genFuncProto(name string, sig *types.Signature, out func(name, retType, params string) error) (err error) {
+func (c *cppGen) genFuncProto(name string, sig *types.Signature, out func(name, retType, params string) error) (err error) {
 	sigParm := sig.Params()
 	var params []string
 	for p := 0; p < sigParm.Len(); p++ {
@@ -340,7 +340,7 @@ func (c *CppGen) genFuncProto(name string, sig *types.Signature, out func(name, 
 	return out(name, retType, strings.Join(params, ", "))
 }
 
-func (c *CppGen) genInterface(name string, iface *types.Interface, n *types.Named) (err error) {
+func (c *cppGen) genInterface(name string, iface *types.Interface, n *types.Named) (err error) {
 	fmt.Fprintf(c.output, "\nstruct %s {\n", name)
 
 	for m := iface.NumMethods(); m > 0; m-- {
@@ -358,7 +358,7 @@ func (c *CppGen) genInterface(name string, iface *types.Interface, n *types.Name
 
 	fmt.Fprintf(c.output, "};\n")
 
-	concreteTypes, _ := c.getIfacesForType(n, ConcreteType)
+	concreteTypes, _ := c.getIfacesForType(n, concreteType)
 	for _, typ := range concreteTypes {
 		if _, ok := c.typeAssertFuncGenerated[typ]; ok {
 			continue
@@ -374,7 +374,7 @@ func (c *CppGen) genInterface(name string, iface *types.Interface, n *types.Name
 	return err
 }
 
-func (c *CppGen) getIfacesForType(n *types.Named, filter IfaceFilter) (uniqIfaces []string, ifaceMeths map[string]struct{}) {
+func (c *cppGen) getIfacesForType(n *types.Named, filter ifaceFilter) (uniqIfaces []string, ifaceMeths map[string]struct{}) {
 	// FIXME: this is highly inneficient and won't scale at all
 	ifaces := make(map[string]struct{})
 	ifaceMeths = make(map[string]struct{})
@@ -391,11 +391,11 @@ func (c *CppGen) getIfacesForType(n *types.Named, filter IfaceFilter) (uniqIface
 		for _, typ := range c.inf.Defs {
 			if def, ok := typ.(*types.TypeName); ok {
 				switch filter {
-				case ConcreteType:
+				case concreteType:
 					if types.IsInterface(def.Type()) {
 						continue
 					}
-				case IfaceType:
+				case ifaceType:
 					if !types.IsInterface(def.Type()) {
 						continue
 					}
@@ -423,9 +423,9 @@ func (c *CppGen) getIfacesForType(n *types.Named, filter IfaceFilter) (uniqIface
 	return uniqIfaces, ifaceMeths
 }
 
-func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error) ([]string, error) {
+func (c *cppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error) ([]string, error) {
 
-	uniqIfaces, ifaceMeths := c.getIfacesForType(n, IfaceType)
+	uniqIfaces, ifaceMeths := c.getIfacesForType(n, ifaceType)
 	if err := out(uniqIfaces); err != nil {
 		return nil, err
 	}
@@ -471,7 +471,7 @@ func (c *CppGen) genIfaceForType(n *types.Named, out func(ifaces []string) error
 	return uniqIfaces, nil
 }
 
-func (c *CppGen) genTryAssert(ifaces []string, name string) {
+func (c *cppGen) genTryAssert(ifaces []string, name string) {
 	if ifaces != nil && len(ifaces) > 0 {
 		fmt.Fprintf(c.output, "template <> %s *moku::try_assert(const moku::interface &iface) {\n", name)
 		for _, iface := range ifaces {
@@ -483,7 +483,7 @@ func (c *CppGen) genTryAssert(ifaces []string, name string) {
 	}
 }
 
-func (c *CppGen) genStruct(name string, s *types.Struct, n *types.Named) (err error) {
+func (c *cppGen) genStruct(name string, s *types.Struct, n *types.Named) (err error) {
 	fmt.Fprintf(c.output, "\nstruct %s", name)
 
 	ifaces, err := c.genIfaceForType(n, func(ifaces []string) error {
@@ -538,7 +538,7 @@ func (c *CppGen) genStruct(name string, s *types.Struct, n *types.Named) (err er
 	return nil
 }
 
-func (c *CppGen) genBasicType(name string, b *types.Basic, n *types.Named) (err error) {
+func (c *cppGen) genBasicType(name string, b *types.Basic, n *types.Named) (err error) {
 	_, err = c.genIfaceForType(n, func(ifaces []string) error {
 		fmt.Fprintf(c.output, "\nstruct %s", name)
 
@@ -571,7 +571,7 @@ func (c *CppGen) genBasicType(name string, b *types.Basic, n *types.Named) (err 
 	return err
 }
 
-func (c *CppGen) genNamedType(name string, n *types.Named) (err error) {
+func (c *cppGen) genNamedType(name string, n *types.Named) (err error) {
 	switch t := n.Underlying().(type) {
 	default:
 		return fmt.Errorf("What to do with the named type %v?", reflect.TypeOf(t))
@@ -587,14 +587,14 @@ func (c *CppGen) genNamedType(name string, n *types.Named) (err error) {
 	}
 }
 
-func (c *CppGen) genPrototype(name string, sig *types.Signature) error {
+func (c *cppGen) genPrototype(name string, sig *types.Signature) error {
 	return c.genFuncProto(name, sig, func(name, retType, params string) error {
 		fmt.Fprintf(c.output, "%s %s(%s);\n", retType, name, params)
 		return nil
 	})
 }
 
-func (c *CppGen) genVar(gen *nodeGen, v *types.Var, mainBlock bool) error {
+func (c *cppGen) genVar(gen *nodeGen, v *types.Var, mainBlock bool) error {
 	typ, err := c.toTypeSig(v.Type())
 	if err != nil {
 		return fmt.Errorf("Couldn't get type signature for variable: %s", err)
@@ -621,7 +621,7 @@ func (c *CppGen) genVar(gen *nodeGen, v *types.Var, mainBlock bool) error {
 	return nil
 }
 
-func (c *CppGen) genConst(gen *nodeGen, k *types.Const, mainBlock bool) error {
+func (c *cppGen) genConst(gen *nodeGen, k *types.Const, mainBlock bool) error {
 	typ, err := c.toTypeSig(k.Type())
 	if err != nil {
 		return fmt.Errorf("Couldn't get type signature for variable: %s", err)
@@ -639,16 +639,16 @@ func (c *CppGen) genConst(gen *nodeGen, k *types.Const, mainBlock bool) error {
 	return nil
 }
 
-func (c *CppGen) genNamespace(p *types.Package) (err error) {
+func (c *cppGen) genNamespace(p *types.Package) (err error) {
 	s := p.Scope()
 
-	if c.symbolFilter.Once(s, "#pragma once") {
+	if c.symFilter.once(s, "#pragma once") {
 		fmt.Fprintln(c.output, "#pragma once")
 	}
 
 	for _, imp := range p.Imports() {
 		include := fmt.Sprintf("#include \"%s.h\"", imp.Name())
-		if c.symbolFilter.Once(s, include) {
+		if c.symFilter.once(s, include) {
 			fmt.Fprintln(c.output, include)
 		}
 	}
@@ -657,7 +657,7 @@ func (c *CppGen) genNamespace(p *types.Package) (err error) {
 		return nil
 	}
 
-	if c.symbolFilter.Once(s, "namespace "+p.Name()) {
+	if c.symFilter.once(s, "namespace "+p.Name()) {
 		fmt.Fprintf(c.output, "namespace %s {\n", p.Name())
 		defer fmt.Fprintf(c.output, "} // namespace %s\n\n", p.Name())
 	}
@@ -678,7 +678,7 @@ func (c *CppGen) genNamespace(p *types.Package) (err error) {
 	for _, name := range s.Names() {
 		obj := s.Lookup(name)
 
-		if !c.symbolFilter.Once(s, name) {
+		if !c.symFilter.once(s, name) {
 			continue
 		}
 
@@ -716,7 +716,7 @@ func (c *CppGen) genNamespace(p *types.Package) (err error) {
 	return nil
 }
 
-func (c *CppGen) genMapType(m *ast.MapType) (string, error) {
+func (c *cppGen) genMapType(m *ast.MapType) (string, error) {
 	k, err := c.genExpr(m.Key)
 	if err != nil {
 		return "", err
@@ -729,7 +729,7 @@ func (c *CppGen) genMapType(m *ast.MapType) (string, error) {
 	return fmt.Sprintf("std::map<%s, %s>", k, v), nil
 }
 
-func (c *CppGen) genCallExpr(ce *ast.CallExpr) (string, error) {
+func (c *cppGen) genCallExpr(ce *ast.CallExpr) (string, error) {
 	sig, hasSig := c.inf.Types[ce.Fun].Type.(*types.Signature)
 
 	fun, err := c.genExpr(ce.Fun)
@@ -771,7 +771,7 @@ func (c *CppGen) genCallExpr(ce *ast.CallExpr) (string, error) {
 	return fmt.Sprintf("%s(%s)", fun, strings.Join(args, ", ")), nil
 }
 
-func (c *CppGen) genBasicLit(b *ast.BasicLit) (string, error) {
+func (c *cppGen) genBasicLit(b *ast.BasicLit) (string, error) {
 	switch b.Kind {
 	default:
 		return "", fmt.Errorf("Unknown basic literal type: %+v", b)
@@ -784,7 +784,7 @@ func (c *CppGen) genBasicLit(b *ast.BasicLit) (string, error) {
 	}
 }
 
-func (c *CppGen) genIdent(i *ast.Ident) (string, error) {
+func (c *cppGen) genIdent(i *ast.Ident) (string, error) {
 	if this := c.recvs.Lookup(i.Name); this != nil {
 		return "this", nil
 	}
@@ -794,11 +794,11 @@ func (c *CppGen) genIdent(i *ast.Ident) (string, error) {
 	return i.Name, nil
 }
 
-func (c *CppGen) genStarExpr(s *ast.StarExpr) (string, error) {
+func (c *cppGen) genStarExpr(s *ast.StarExpr) (string, error) {
 	return c.genUnaryExpr(&ast.UnaryExpr{X: s.X, Op: token.MUL})
 }
 
-func (c *CppGen) genKeyValueExpr(kv *ast.KeyValueExpr) (string, error) {
+func (c *cppGen) genKeyValueExpr(kv *ast.KeyValueExpr) (string, error) {
 	key, err := c.genExpr(kv.Key)
 	if err != nil {
 		return "", err
@@ -817,7 +817,7 @@ func (c *CppGen) genKeyValueExpr(kv *ast.KeyValueExpr) (string, error) {
 	}
 }
 
-func (c *CppGen) genTypeAssertExpr(ta *ast.TypeAssertExpr) (string, error) {
+func (c *cppGen) genTypeAssertExpr(ta *ast.TypeAssertExpr) (string, error) {
 	expr, err := c.genExpr(ta.X)
 	if err != nil {
 		return "", err
@@ -835,7 +835,7 @@ func (c *CppGen) genTypeAssertExpr(ta *ast.TypeAssertExpr) (string, error) {
 	return fmt.Sprintf("moku::type_assert<%s>(%s)", typ, expr), nil
 }
 
-func (c *CppGen) genExpr(x ast.Expr) (string, error) {
+func (c *cppGen) genExpr(x ast.Expr) (string, error) {
 	switch x := x.(type) {
 	default:
 		return "", fmt.Errorf("Couldn't generate expression with type: %s", reflect.TypeOf(x))
@@ -890,8 +890,8 @@ func (c *CppGen) genExpr(x ast.Expr) (string, error) {
 	}
 }
 
-func (c *CppGen) genInit() bool {
-	for ident, _ := range c.inf.Defs {
+func (c *cppGen) genInit() bool {
+	for ident := range c.inf.Defs {
 		if ident.Name == "init" {
 			fmt.Fprintf(c.output, "void init();\n")
 			return true
@@ -901,7 +901,7 @@ func (c *CppGen) genInit() bool {
 	return false
 }
 
-func (c *CppGen) genMain() (err error) {
+func (c *cppGen) genMain() (err error) {
 	hasInit := c.genInit()
 
 	fmt.Fprintf(c.output, "int main() {\n")
@@ -953,12 +953,12 @@ type nodeGen struct {
 	escapees map[*types.Var]bool
 }
 
-func (c *CppGen) genComment(gen *nodeGen, comment *ast.Comment) error {
+func (c *cppGen) genComment(gen *nodeGen, comment *ast.Comment) error {
 	fmt.Fprintf(gen.out, "/* %s */", comment.Text)
 	return nil
 }
 
-func (c *CppGen) genFuncDecl(gen *nodeGen, f *ast.FuncDecl) (err error) {
+func (c *cppGen) genFuncDecl(gen *nodeGen, f *ast.FuncDecl) (err error) {
 	var typ types.Object
 	typ, ok := c.inf.Defs[f.Name]
 	if !ok {
@@ -1019,7 +1019,7 @@ func (c *CppGen) genFuncDecl(gen *nodeGen, f *ast.FuncDecl) (err error) {
 	return err
 }
 
-func (c *CppGen) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
+func (c *cppGen) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
 	var varTypes []types.Type
 	var vars []string
 
@@ -1060,7 +1060,7 @@ func (c *CppGen) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
 	case token.QUO_ASSIGN:
 		fmt.Fprint(gen.out, " *= ")
 	case token.REM_ASSIGN:
-		fmt.Fprint(gen.out, " %= ")
+		fmt.Fprintf(gen.out, "%s", " %= ")
 	case token.AND_ASSIGN:
 		fmt.Fprint(gen.out, " &= ")
 	case token.OR_ASSIGN:
@@ -1091,7 +1091,7 @@ func (c *CppGen) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
 	}
 
 	var sigs []string
-	for i, _ := range a.Rhs {
+	for i := range a.Rhs {
 		sig, err := c.toTypeSig(varTypes[i])
 		if err != nil {
 			return fmt.Errorf("Couldn't get type signature: %s", err)
@@ -1115,7 +1115,7 @@ func (c *CppGen) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
 	return nil
 }
 
-func (c *CppGen) genSelectorExpr(s *ast.SelectorExpr) (string, error) {
+func (c *cppGen) genSelectorExpr(s *ast.SelectorExpr) (string, error) {
 	var obj types.Object
 	obj, ok := c.inf.Uses[s.Sel]
 	if !ok {
@@ -1149,7 +1149,7 @@ func (c *CppGen) genSelectorExpr(s *ast.SelectorExpr) (string, error) {
 	}
 }
 
-func (c *CppGen) genForStmt(gen *nodeGen, f *ast.ForStmt) (err error) {
+func (c *cppGen) genForStmt(gen *nodeGen, f *ast.ForStmt) (err error) {
 	scope, ok := c.inf.Scopes[f]
 	if !ok {
 		return fmt.Errorf("Could not find scope")
@@ -1204,14 +1204,10 @@ func (c *CppGen) genForStmt(gen *nodeGen, f *ast.ForStmt) (err error) {
 	fmt.Fprintf(gen.out, ")")
 
 	filt := func(name string) bool { return true }
-	if err = c.genScopeAndBody(gen, f.Body, f.Body, true, filt); err != nil {
-		return err
-	}
-
-	return nil
+	return c.genScopeAndBody(gen, f.Body, f.Body, true, filt)
 }
 
-func (c *CppGen) genBlockStmt(gen *nodeGen, blk *ast.BlockStmt) (err error) {
+func (c *cppGen) genBlockStmt(gen *nodeGen, blk *ast.BlockStmt) (err error) {
 	if blk == nil || blk.List == nil {
 		return nil
 	}
@@ -1230,7 +1226,7 @@ func (c *CppGen) genBlockStmt(gen *nodeGen, blk *ast.BlockStmt) (err error) {
 	return nil
 }
 
-func (c *CppGen) genScopeAndBody(gen *nodeGen, block *ast.BlockStmt, scope ast.Node, newScope bool, filter func(name string) bool) (err error) {
+func (c *cppGen) genScopeAndBody(gen *nodeGen, block *ast.BlockStmt, scope ast.Node, newScope bool, filter func(name string) bool) (err error) {
 	if newScope {
 		fmt.Fprint(gen.out, "{")
 		defer fmt.Fprintln(gen.out, "}")
@@ -1261,7 +1257,7 @@ func (c *CppGen) genScopeAndBody(gen *nodeGen, block *ast.BlockStmt, scope ast.N
 	return nil
 }
 
-func (c *CppGen) genScopeVars(gen *nodeGen, node ast.Node, filter func(name string) bool) (err error) {
+func (c *cppGen) genScopeVars(gen *nodeGen, node ast.Node, filter func(name string) bool) (err error) {
 	if _, ok := node.(*ast.FuncType); ok && gen.hasDefer {
 		fmt.Fprintf(c.output, "moku::defer _defer_;\n")
 	}
@@ -1286,11 +1282,11 @@ func (c *CppGen) genScopeVars(gen *nodeGen, node ast.Node, filter func(name stri
 	return nil
 }
 
-func (c *CppGen) genExprStmt(gen *nodeGen, e *ast.ExprStmt) error {
+func (c *cppGen) genExprStmt(gen *nodeGen, e *ast.ExprStmt) error {
 	return c.walk(gen, e.X)
 }
 
-func (c *CppGen) genBinaryExpr(b *ast.BinaryExpr) (s string, err error) {
+func (c *cppGen) genBinaryExpr(b *ast.BinaryExpr) (s string, err error) {
 	x, err := c.genExpr(b.X)
 	if err != nil {
 		return "", err
@@ -1321,12 +1317,12 @@ func (c *CppGen) genBinaryExpr(b *ast.BinaryExpr) (s string, err error) {
 	}
 }
 
-func (c *CppGen) genField(gen *nodeGen, f *ast.Field) error {
+func (c *cppGen) genField(gen *nodeGen, f *ast.Field) error {
 	fmt.Fprintf(gen.out, "// field %+v\n", f)
 	return nil
 }
 
-func (c *CppGen) genReturnStmt(gen *nodeGen, r *ast.ReturnStmt) (err error) {
+func (c *cppGen) genReturnStmt(gen *nodeGen, r *ast.ReturnStmt) (err error) {
 	fmt.Fprintf(gen.out, "return ")
 
 	if len(r.Results) == 1 {
@@ -1350,7 +1346,7 @@ func (c *CppGen) genReturnStmt(gen *nodeGen, r *ast.ReturnStmt) (err error) {
 	return nil
 }
 
-func (c *CppGen) genCompositeLit(cl *ast.CompositeLit) (str string, err error) {
+func (c *cppGen) genCompositeLit(cl *ast.CompositeLit) (str string, err error) {
 	var typ string
 	if cl.Type != nil {
 		if typ, err = c.genExpr(cl.Type); err != nil {
@@ -1370,14 +1366,14 @@ func (c *CppGen) genCompositeLit(cl *ast.CompositeLit) (str string, err error) {
 	return fmt.Sprintf("%s{%s}", typ, strings.Join(elts, ", ")), nil
 }
 
-func (c *CppGen) genParenExpr(p *ast.ParenExpr) (s string, err error) {
+func (c *cppGen) genParenExpr(p *ast.ParenExpr) (s string, err error) {
 	if expr, err := c.genExpr(p.X); err == nil {
 		return fmt.Sprintf("(%s)", expr), nil
 	}
 	return "", err
 }
 
-func (c *CppGen) genIncDecStmt(gen *nodeGen, p *ast.IncDecStmt) (err error) {
+func (c *cppGen) genIncDecStmt(gen *nodeGen, p *ast.IncDecStmt) (err error) {
 	if err = c.walk(gen, p.X); err != nil {
 		return err
 	}
@@ -1396,7 +1392,7 @@ func (c *CppGen) genIncDecStmt(gen *nodeGen, p *ast.IncDecStmt) (err error) {
 	return nil
 }
 
-func (c *CppGen) genCommentGroup(gen *nodeGen, g *ast.CommentGroup) (err error) {
+func (c *cppGen) genCommentGroup(gen *nodeGen, g *ast.CommentGroup) (err error) {
 	for _, comment := range g.List {
 		if err = c.walk(gen, comment); err != nil {
 			return err
@@ -1405,7 +1401,7 @@ func (c *CppGen) genCommentGroup(gen *nodeGen, g *ast.CommentGroup) (err error) 
 	return nil
 }
 
-func (c *CppGen) genLabeledStmt(gen *nodeGen, l *ast.LabeledStmt) (err error) {
+func (c *cppGen) genLabeledStmt(gen *nodeGen, l *ast.LabeledStmt) (err error) {
 	if err = c.walk(gen, l.Label); err != nil {
 		return err
 	}
@@ -1413,7 +1409,7 @@ func (c *CppGen) genLabeledStmt(gen *nodeGen, l *ast.LabeledStmt) (err error) {
 	return nil
 }
 
-func (c *CppGen) genBranchStmt(gen *nodeGen, b *ast.BranchStmt) (err error) {
+func (c *cppGen) genBranchStmt(gen *nodeGen, b *ast.BranchStmt) (err error) {
 	switch b.Tok {
 	case token.GOTO:
 		if b.Label == nil {
@@ -1442,7 +1438,7 @@ func (c *CppGen) genBranchStmt(gen *nodeGen, b *ast.BranchStmt) (err error) {
 	return nil
 }
 
-func (c *CppGen) genArrayType(a *ast.ArrayType) (s string, err error) {
+func (c *cppGen) genArrayType(a *ast.ArrayType) (s string, err error) {
 	typ, err := c.genExpr(a.Elt)
 	if err != nil {
 		return "", err
@@ -1455,7 +1451,7 @@ func (c *CppGen) genArrayType(a *ast.ArrayType) (s string, err error) {
 	return fmt.Sprintf("std::vector<%s>", typ), nil
 }
 
-func (c *CppGen) genIndexExpr(i *ast.IndexExpr) (s string, err error) {
+func (c *cppGen) genIndexExpr(i *ast.IndexExpr) (s string, err error) {
 	expr, err := c.genExpr(i.X)
 	if err != nil {
 		return "", nil
@@ -1469,7 +1465,7 @@ func (c *CppGen) genIndexExpr(i *ast.IndexExpr) (s string, err error) {
 	return fmt.Sprintf("%s[%s]", expr, index), nil
 }
 
-func (c *CppGen) genDeferStmt(gen *nodeGen, d *ast.DeferStmt) (err error) {
+func (c *cppGen) genDeferStmt(gen *nodeGen, d *ast.DeferStmt) (err error) {
 	fmt.Fprintf(gen.out, "_defer_.Push([=]() mutable {")
 
 	if err = c.walk(gen, d.Call); err != nil {
@@ -1483,7 +1479,7 @@ func (c *CppGen) genDeferStmt(gen *nodeGen, d *ast.DeferStmt) (err error) {
 	return nil
 }
 
-func (c *CppGen) genSliceExpr(s *ast.SliceExpr) (str string, err error) {
+func (c *cppGen) genSliceExpr(s *ast.SliceExpr) (str string, err error) {
 	var args []string
 
 	arg, err := c.genExpr(s.X)
@@ -1528,7 +1524,7 @@ func (c *CppGen) genSliceExpr(s *ast.SliceExpr) (str string, err error) {
 	return fmt.Sprintf("moku::slice_expr<%s>(%s)", ctyp, strings.Join(args, ", ")), nil
 }
 
-func (c *CppGen) genIfStmt(gen *nodeGen, i *ast.IfStmt) (err error) {
+func (c *cppGen) genIfStmt(gen *nodeGen, i *ast.IfStmt) (err error) {
 	if i.Init != nil {
 		fmt.Fprint(gen.out, "{")
 		defer fmt.Fprint(gen.out, "}")
@@ -1559,7 +1555,7 @@ func (c *CppGen) genIfStmt(gen *nodeGen, i *ast.IfStmt) (err error) {
 	return nil
 }
 
-func (c *CppGen) genRangeStmt(gen *nodeGen, r *ast.RangeStmt) (err error) {
+func (c *cppGen) genRangeStmt(gen *nodeGen, r *ast.RangeStmt) (err error) {
 	getRangeFunc := func() (string, string) {
 		var keyIdent, valIdent string
 
@@ -1623,14 +1619,14 @@ func (c *CppGen) genRangeStmt(gen *nodeGen, r *ast.RangeStmt) (err error) {
 	return nil
 }
 
-func (c *CppGen) genUnaryExpr(u *ast.UnaryExpr) (s string, err error) {
+func (c *cppGen) genUnaryExpr(u *ast.UnaryExpr) (s string, err error) {
 	if expr, err := c.genExpr(u.X); err == nil {
 		return fmt.Sprintf("%s%s", u.Op, expr), nil
 	}
 	return "", err
 }
 
-func (c *CppGen) genFuncLit(f *ast.FuncLit) (str string, err error) {
+func (c *cppGen) genFuncLit(f *ast.FuncLit) (str string, err error) {
 	typ, ok := c.inf.Types[f]
 	if !ok {
 		return "", fmt.Errorf("Couldn't find function literal scope")
@@ -1655,7 +1651,7 @@ func (c *CppGen) genFuncLit(f *ast.FuncLit) (str string, err error) {
 	return litGen.out.(*bytes.Buffer).String(), nil
 }
 
-func (c *CppGen) genSwitchStmt(gen *nodeGen, s *ast.SwitchStmt) (err error) {
+func (c *cppGen) genSwitchStmt(gen *nodeGen, s *ast.SwitchStmt) (err error) {
 	scope, ok := c.inf.Scopes[s]
 	if !ok {
 		return fmt.Errorf("Could not find scope")
@@ -1778,10 +1774,10 @@ func (c *CppGen) genSwitchStmt(gen *nodeGen, s *ast.SwitchStmt) (err error) {
 	return nil
 }
 
-func (c *CppGen) walk(gen *nodeGen, node ast.Node) error {
+func (c *cppGen) walk(gen *nodeGen, node ast.Node) error {
 	switch n := node.(type) {
 	default:
-		return fmt.Errorf("Unknown node type: %s\n", reflect.TypeOf(n))
+		return fmt.Errorf("unknown node type: %s", reflect.TypeOf(n))
 
 	case ast.Expr:
 		out, err := c.genExpr(n)
@@ -1845,11 +1841,11 @@ func (c *CppGen) walk(gen *nodeGen, node ast.Node) error {
 	}
 }
 
-func (c *CppGen) GenerateHdr() (err error) {
+func (c *cppGen) GenerateHdr() (err error) {
 	return c.genNamespace(c.pkg)
 }
 
-func (c *CppGen) GenerateImpl() (err error) {
+func (c *cppGen) GenerateImpl() (err error) {
 	gen := nodeGen{out: c.output}
 	for _, decl := range c.ast.Decls {
 		if err := c.walk(&gen, ast.Node(decl)); err != nil {
@@ -1857,9 +1853,5 @@ func (c *CppGen) GenerateImpl() (err error) {
 		}
 	}
 
-	if err = c.genMain(); err != nil {
-		return err
-	}
-
-	return nil
+	return c.genMain()
 }
