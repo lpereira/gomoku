@@ -500,7 +500,6 @@ func (c *cppGen) genStruct(name string, s *types.Struct, n *types.Named) (err er
 
 		fmt.Fprint(c.output, " {\n")
 		numFields := s.NumFields()
-		var nilCmp []string
 		for f := 0; f < numFields; f++ {
 			f := s.Field(f)
 
@@ -515,15 +514,11 @@ func (c *cppGen) genStruct(name string, s *types.Struct, n *types.Named) (err er
 			}
 
 			if nilVal != "" {
-				nilCmp = append(nilCmp, fmt.Sprintf("%s == %s", f.Name(), nilVal))
 				fmt.Fprintf(c.output, "%s %s{%s};\n", typ, f.Name(), nilVal)
 			} else {
-				nilCmp = append(nilCmp, fmt.Sprintf("%s._isNil_()", f.Name()))
 				fmt.Fprintf(c.output, "%s %s;\n", typ, f.Name())
 			}
 		}
-
-		fmt.Fprintf(c.output, "bool _isNil_() const { return %s; }", strings.Join(nilCmp, " && "))
 
 		return nil
 	})
@@ -532,6 +527,19 @@ func (c *cppGen) genStruct(name string, s *types.Struct, n *types.Named) (err er
 	}
 
 	fmt.Fprintf(c.output, "};\n")
+
+	fmt.Fprintf(c.output, "template <> inline bool moku::is_nil<%s>(const %s& %s) {", name, name, strings.ToLower(name))
+	var nilCmp []string
+	for f := 0; f < s.NumFields(); f++ {
+		f := s.Field(f)
+		typ, err := c.toTypeSig(f.Type())
+		if err != nil {
+			return errors.Wrap(err, "could not generate is_nil function")
+		}
+		nilCall := fmt.Sprintf("moku::is_nil<%s>(%s.%s)", typ, strings.ToLower(name), f.Name())
+		nilCmp = append(nilCmp, nilCall)
+	}
+	fmt.Fprintf(c.output, "return %s; }", strings.Join(nilCmp, "&&"))
 
 	c.genTryAssert(ifaces, name)
 
@@ -559,9 +567,11 @@ func (c *cppGen) genBasicType(name string, b *types.Basic, n *types.Named) (err 
 
 		fmt.Fprintf(c.output, ": %s {\n", strings.Join(base, ", "))
 		fmt.Fprintf(c.output, "%s() : moku::basic<%s>{%s} {}\n", name, typ, nilValue)
-		fmt.Fprintf(c.output, "bool _isNil_() const { return %s(this) == %s; }", typ, nilValue)
 
 		fmt.Fprintf(c.output, "};\n")
+
+		fmt.Fprintf(c.output, "template <> inline bool moku::is_nil<%s>(const %s& %s) {", name, name, strings.ToLower(name))
+		fmt.Fprintf(c.output, "return moku::is_nil<%s>(%s(%s)); }", typ, typ, strings.ToLower(name))
 
 		c.genTryAssert(ifaces, name)
 
