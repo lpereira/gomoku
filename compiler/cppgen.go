@@ -753,7 +753,7 @@ func (c *cppGen) genCallExpr(ce *ast.CallExpr) (string, error) {
 	for i, arg := range ce.Args {
 		var argExp string
 
-		if hasSig {
+		if hasSig && i < sig.Params().Len() {
 			typ := sig.Params().At(i).Type()
 
 			if iface, isIface := typ.Underlying().(*types.Interface); isIface && iface.Empty() {
