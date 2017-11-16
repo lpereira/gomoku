@@ -1311,9 +1311,9 @@ func (c *cppGen) genBinaryExpr(b *ast.BinaryExpr) (s string, err error) {
 	nilCmp := func(expr string, op token.Token) (string, error) {
 		switch b.Op {
 		case token.EQL:
-			return fmt.Sprintf("moku::is_nil(%s)", x), nil
+			return fmt.Sprintf("moku::is_nil(%s)", expr), nil
 		case token.NEQ:
-			return fmt.Sprintf("!moku::is_nil(%s)", x), nil
+			return fmt.Sprintf("!moku::is_nil(%s)", expr), nil
 		default:
 			return "", errors.Errorf("nil can only be compared with equality")
 		}
