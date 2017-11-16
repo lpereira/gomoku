@@ -369,7 +369,7 @@ func (c *cppGen) genInterface(name string, iface *types.Interface, n *types.Name
 		c.typeAssertFuncGenerated[typ] = struct{}{}
 
 		fmt.Fprintf(c.output, "template <> inline %s *moku::try_assert(const moku::interface &iface) {\n", typ)
-		fmt.Fprintf(c.output, "return moku::type_registry::type_assert<%s>(iface);", typ)
+		fmt.Fprintf(c.output, "return moku::type_registry::try_assert<%s>(iface);", typ)
 		fmt.Fprintf(c.output, "}\n")
 	}
 
@@ -848,10 +848,20 @@ func (c *cppGen) genTypeAssertExpr(ta *ast.TypeAssertExpr) (string, error) {
 	return fmt.Sprintf("moku::type_assert<%s>(%s)", typ, expr), nil
 }
 
+func (c *cppGen) genInterfaceType(it *ast.InterfaceType) (string, error) {
+	if len(it.Methods.List) > 0 {
+		return "", errors.New("non-empty interface expressions not supported yet")
+	}
+	return "moku::empty_interface", nil
+}
+
 func (c *cppGen) genExpr(x ast.Expr) (string, error) {
 	switch x := x.(type) {
 	default:
 		return "", errors.Errorf("couldn't generate expression with type: %s", reflect.TypeOf(x))
+
+	case *ast.InterfaceType:
+		return c.genInterfaceType(x)
 
 	case *ast.TypeAssertExpr:
 		return c.genTypeAssertExpr(x)
