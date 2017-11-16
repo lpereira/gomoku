@@ -373,7 +373,7 @@ func (c *cppGen) genInterface(name string, iface *types.Interface, n *types.Name
 		fmt.Fprintf(c.output, "}\n")
 	}
 
-	return err
+	return errors.Wrap(err, "could not generate interface")
 }
 
 func (c *cppGen) getIfacesForType(n *types.Named, filter ifaceFilter) (uniqIfaces []string, ifaceMeths map[string]struct{}) {
@@ -568,7 +568,7 @@ func (c *cppGen) genBasicType(name string, b *types.Basic, n *types.Named) (err 
 		return nil
 	})
 
-	return err
+	return errors.Wrap(err, "could not generate basic type")
 }
 
 func (c *cppGen) genNamedType(name string, n *types.Named) (err error) {
@@ -588,10 +588,12 @@ func (c *cppGen) genNamedType(name string, n *types.Named) (err error) {
 }
 
 func (c *cppGen) genPrototype(name string, sig *types.Signature) error {
-	return c.genFuncProto(name, sig, func(name, retType, params string) error {
+	err := c.genFuncProto(name, sig, func(name, retType, params string) error {
 		fmt.Fprintf(c.output, "%s %s(%s);\n", retType, name, params)
 		return nil
 	})
+
+	return errors.Wrap(err, "could not generate prototype")
 }
 
 func (c *cppGen) genVar(gen *nodeGen, v *types.Var, mainBlock bool) error {
@@ -795,7 +797,8 @@ func (c *cppGen) genIdent(i *ast.Ident) (string, error) {
 }
 
 func (c *cppGen) genStarExpr(s *ast.StarExpr) (string, error) {
-	return c.genUnaryExpr(&ast.UnaryExpr{X: s.X, Op: token.MUL})
+	str, err := c.genUnaryExpr(&ast.UnaryExpr{X: s.X, Op: token.MUL})
+	return str, errors.Wrap(err, "could not generate star expression")
 }
 
 func (c *cppGen) genKeyValueExpr(kv *ast.KeyValueExpr) (string, error) {
@@ -992,7 +995,7 @@ func (c *cppGen) genFuncDecl(gen *nodeGen, f *ast.FuncDecl) (err error) {
 		return nil
 	})
 	if err != nil {
-		return err
+		return errors.Wrap(err, "could not generate function declaration")
 	}
 
 	c.recvs.Push(recv)
@@ -1026,7 +1029,7 @@ func (c *cppGen) genAssignStmt(gen *nodeGen, a *ast.AssignStmt) (err error) {
 	for _, e := range a.Lhs {
 		v, err := c.genExpr(e)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "could not generate assignment statement")
 		}
 		vars = append(vars, v)
 	}
@@ -1281,7 +1284,8 @@ func (c *cppGen) genScopeVars(gen *nodeGen, node ast.Node, filter func(name stri
 }
 
 func (c *cppGen) genExprStmt(gen *nodeGen, e *ast.ExprStmt) error {
-	return c.walk(gen, e.X)
+	err := c.walk(gen, e.X)
+	return errors.Wrap(err, "could not generate expression statement")
 }
 
 func (c *cppGen) genBinaryExpr(b *ast.BinaryExpr) (s string, err error) {
@@ -1368,7 +1372,7 @@ func (c *cppGen) genParenExpr(p *ast.ParenExpr) (s string, err error) {
 	if expr, err := c.genExpr(p.X); err == nil {
 		return fmt.Sprintf("(%s)", expr), nil
 	}
-	return "", err
+	return "", errors.Wrap(err, "could not generate parentized expression")
 }
 
 func (c *cppGen) genIncDecStmt(gen *nodeGen, p *ast.IncDecStmt) (err error) {
