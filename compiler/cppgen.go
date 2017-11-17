@@ -1335,7 +1335,12 @@ func (c *cppGen) genBinaryExpr(b *ast.BinaryExpr) (s string, err error) {
 	case x == "nil":
 		return nilCmp(y, b.Op)
 	default:
-		return fmt.Sprintf("%s %s %s", x, b.Op, y), nil
+		switch b.Op {
+		default:
+			return fmt.Sprintf("%s %s %s", x, b.Op, y), nil
+		case token.AND_NOT:
+			return fmt.Sprintf("%s & ~(%s)", x, y), nil
+		}
 	}
 }
 
