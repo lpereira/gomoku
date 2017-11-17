@@ -1,13 +1,31 @@
 # Gomoku
 
 Gomoku is a compiler for programs written in the Go Programming
-Language, targeting modern C++.
+Language, targeting modern-ish C++.
 
 This is an experiment to determine how well Go will perform on embedded
 devices.  Please see the FAQ for more details on the reasoning behind
 this project.
 
 Help to move this forward is greatly appreciated.
+
+# Usage
+
+Pass the path to the program being built.  Paths relative to `$GOHOME`,
+relative, and absolute paths are accepted.  Output will be generated in
+`outdir/` under the current directory (this directory will be cleared
+every run):
+
+    gomoku ./samples/interfaces
+
+This will generate a pair of `.cpp` and `.h` files for each imported
+package (and their dependencies).  Generated files are not indented
+(yet), so piping them through `clang-format` (or other indenting tool)
+is recommended.
+
+It is posible that the compiler will abort midway through code
+generation since not all data types, statements, and expressions are
+implemented yet.
 
 # Sample code
 
@@ -258,23 +276,6 @@ void _main() {
 }
 ```
 
-# Usage
-
-Pass the path to the program being built.  Paths relative to `$GOHOME`,
-relative, and absolute paths are accepted.  Output will be generated in
-`outdir/` under the current directory (this directory will be cleared
-every run):
-
-    gomoku ./samples/interfaces
-
-This will generate a pair of `.cpp` and `.h` files for each imported
-package (and their dependencies).  Generated files are not indented
-(yet), so piping them through `clang-format` (or other indenting tool)
-is recommended.
-
-It is posible that the compiler will abort midway through code
-generation since not all data types, statements, and expressions are
-implemented yet.
 
 # FAQ
 
@@ -291,18 +292,20 @@ good to not make the pun.
 
 There are a few reasons:
 
-* There are many architectures out there that I'd like to support, and
+* There are many architectures out there that we'd like to support, and
 writing a backend for every single one of them would be impractical. 
-Mainly, We'd like to support x86, ARC, ARM Thumb, Xtensa, and RISC-V. 
+Mainly, we'd like to support x86, ARC, ARM Thumb, Xtensa, and RISC-V. 
 x86 is already (well) supported by the reference Go compiler, but
 microcontroller class x86 will often sport an older ISA (usually i586
-class CPU or older).
+class CPU or older), which most likely would involve some maintenance
+work.
 * Go was never designed for embedded applications, specially when
 executing on environments with severe memory restrictions such as many
-microcontrollers.
+microcontrollers.  The reference runtime and compiler assumes this at
+every opportunity.
 * While C++ is a language that people love to hate, the modern variants are
 powerful, reasonably expressive, and compilers such as GCC and Clang
-leverage years of engineering time in order to produce correct, efficient
+leverage years of engineering effort in order to produce correct, efficient
 code.  All the while supporting all the architectures that we'd want to
 support.
 * The Go compiler was recently changed to use an SSA backend; this made
@@ -311,8 +314,32 @@ generates C code.  This would mostly take care of the instruction set,
 though, still leaving on the table many of the assumptions for the kind
 of operating systems the reference compiler has been designed to
 generate code for.
-* This is a good challenge and a great way to learn all the nooks and
+* This is a good challenge and a great way to learn all the nook and
 crannies of a language.
+
+## How does transpiling to C++ make Go more "embeddable"? Especially when considering that Go has a non-trivial runtime, including a garbage collector and support for multithreading.
+
+Gomoku isn't targetting 8-bit microcontrollers; it's targetting the
+32-bit ones, with reasonably fast CPUs (over 40MHz, sometimes with dual
+cores running at over 100MHz), a few hundred kilobytes of RAM, and a
+megabyte or so of ROM.
+
+For instance, it's possible to run JavaScript with [zephyr.js](https://github.com/01org/zephyr.js), which
+also has a non-trivial runtime and garbage collector.
+
+[Zephyr](https://zephyrproject.org) also has threads and all the [basic building blocks](http://docs.zephyrproject.org/api/kernel_api.html) necessary to
+build Go's primitives on top of, and it's the embedded operating system
+Gomoku is targeting first.  (Linux will be supported as well mostly for
+debugging reasons, of course.  Maybe it will be possible to use some Go
+libraries from C++ as a "stretch goal".)
+
+The C++ standard template library (stl) will most likely be used at
+first to support the Gomoku runtime, but it'll eventually be ditched
+for something that works better on more limited platforms.  Also, the
+Go standard library won't be used as is on embedded devices; a new one
+will most likely have to be written.  This means that much of what
+makes Go the environment that it is won't be available for Gomoku; see
+the FAQ on the project name.
 
 ## What's the license?
 
@@ -406,3 +433,6 @@ are way more challenging than others:
 - [ ] Perform escape analysis to determine where to allocate things
 - [ ] Channels (including select statement)
 - [ ] Goroutines
+- [ ] Implement _
+- [ ] Implement built-in functions (println, len, cap, etc.)
+- [ ] Implement interface expressions for non-empty interfaces
