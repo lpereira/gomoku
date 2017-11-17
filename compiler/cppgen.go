@@ -143,6 +143,15 @@ func (c *cppGen) toTypeSig(t types.Type) (string, error) {
 	default:
 		return "", errors.Errorf("unknown type: %s", reflect.TypeOf(typ))
 
+	case *types.Struct:
+		// TODO: generate is_nil function for this
+		fields, err := c.genStructFields(typ)
+		if err != nil {
+			return "", errors.Wrap(err, "could not generate type signature for struct")
+		}
+
+		return fmt.Sprintf("struct { %s }", strings.Join(fields, " ")), nil
+
 	case *types.Chan:
 		elemTyp, err := c.toTypeSig(typ.Elem())
 		if err != nil {
@@ -485,6 +494,31 @@ func (c *cppGen) genTryAssert(ifaces []string, name string) {
 	}
 }
 
+func (c *cppGen) genStructFields(s *types.Struct) ([]string, error) {
+	output := []string{}
+	numFields := s.NumFields()
+	for f := 0; f < numFields; f++ {
+		f := s.Field(f)
+
+		typ, err := c.toTypeSig(f.Type())
+		if err != nil {
+			return nil, errors.Wrap(err, "could not generate type signature for struct field")
+		}
+
+		nilVal, err := c.toNilVal(f.Type())
+		if err != nil {
+			return nil, errors.Wrapf(err, "couldn't determine nil value for %s while creating struct", f.Name())
+		}
+
+		if nilVal != "" {
+			output = append(output, fmt.Sprintf("%s %s{%s};", typ, f.Name(), nilVal))
+		} else {
+			output = append(output, fmt.Sprintf("%s %s;", typ, f.Name()))
+		}
+	}
+	return output, nil
+}
+
 func (c *cppGen) genStruct(name string, s *types.Struct, n *types.Named) (err error) {
 	fmt.Fprintf(c.output, "\nstruct %s", name)
 
@@ -498,27 +532,12 @@ func (c *cppGen) genStruct(name string, s *types.Struct, n *types.Named) (err er
 			fmt.Fprintf(c.output, " : %s", strings.Join(public, ", "))
 		}
 
-		fmt.Fprint(c.output, " {\n")
-		numFields := s.NumFields()
-		for f := 0; f < numFields; f++ {
-			f := s.Field(f)
-
-			typ, err := c.toTypeSig(f.Type())
-			if err != nil {
-				return errors.Wrap(err, "could not generate type signature for struct field")
-			}
-
-			nilVal, err := c.toNilVal(f.Type())
-			if err != nil {
-				return errors.Wrapf(err, "couldn't determine nil value for %s while creating struct", name)
-			}
-
-			if nilVal != "" {
-				fmt.Fprintf(c.output, "%s %s{%s};\n", typ, f.Name(), nilVal)
-			} else {
-				fmt.Fprintf(c.output, "%s %s;\n", typ, f.Name())
-			}
+		fields, err := c.genStructFields(s)
+		if err != nil {
+			return errors.Wrap(err, "could not generate structure fields")
 		}
+
+		fmt.Fprintf(c.output, "{ %s", strings.Join(fields, "\n"))
 
 		return nil
 	})
